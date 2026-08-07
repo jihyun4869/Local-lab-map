@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayerVisibility, RegionPreference } from './types';
 import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES } from './data/defaultData';
 import { AdminLevel } from './data/koreaGeoJson';
