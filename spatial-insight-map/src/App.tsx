@@ -18,7 +18,15 @@ export default function App() {
   });
 
   // Region preferences state initialized with sample data
-  const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(SAMPLE_REGION_PREFERENCES);
+  // ⭕ 수정 후 코드
+const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(() => {
+  const saved = localStorage.getItem('regionPreferences');
+  return saved ? JSON.parse(saved) : {};
+});
+
+useEffect(() => {
+  localStorage.setItem('regionPreferences', JSON.stringify(regionPreferences));
+}, [regionPreferences]);
 
   // Selected region side panel state
   const [selectedRegion, setSelectedRegion] = useState<{ code: string; name: string } | null>(null);
