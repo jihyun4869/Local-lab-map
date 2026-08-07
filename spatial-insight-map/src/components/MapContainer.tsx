@@ -72,17 +72,16 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   // Function to determine active administrative level from zoom level
   const calculateAdminLevel = (zoom: number): AdminLevel => {
     if (zoom < 9.5) return 1;        // 축소 레벨: 광역자치단체 (시/도)
-    if (zoom < 11.5) return 2;       // 중간 레벨: 기초자치단체 (시/군/구)
-    if (zoom < 12.5) return 3;       // 확대 레벨: 3단계 행정구역 (일반구/행정구/행정시) (11.5 < zoom < 12.5)
-    return 4;                        // 고배율 확대 레벨: 4단계 행정구역 (전국 읍·면·동) (zoom >= 12.5)
+    if (zoom < 12.5) return 2;       // 중간 레벨: 기초자치단체 (시/군/구) (zoom 12 포함: 9.5 <= zoom < 12.5)
+    return 3;                        // 확대 레벨: 3단계 행정구역 (전국 읍·면·동) (zoom >= 12.5)
   };
 
   // Helper to determine if Preference Layer is enabled for a specific AdminLevel
   const isPrefEnabledForLevel = (level: AdminLevel, vis: LayerVisibility): boolean => {
     if (!vis.preference) return false;
     if (level === 1) return vis.prefLevel1 !== false;
-    if (level === 2 || level === 3) return vis.prefLevel2 !== false;
-    if (level === 4) return vis.prefLevel3 !== false;
+    if (level === 2) return vis.prefLevel2 !== false;
+    if (level === 3 || level === 4) return vis.prefLevel3 !== false;
     return true;
   };
 
@@ -226,49 +225,115 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         });
       }
 
+      let pCount = 0;
+      let dCount = 0;
+
       if (pref) {
-        const pCount = pref.prefItems ? pref.prefItems.filter((i) => i.checked).length : 0;
-        const dCount = pref.disprefItems ? pref.disprefItems.filter((i) => i.checked).length : 0;
+        pCount = pref.prefItems ? pref.prefItems.filter((i) => i.checked).length : 0;
+        dCount = pref.disprefItems ? pref.disprefItems.filter((i) => i.checked).length : 0;
+      }
 
-        if (pCount > 0 || dCount > 0) {
+      // If feature is at a lower administrative level than current active map level (e.g. Level 2 when activeLevel is 1)
+      if (level > activeLevel) {
+        // Only level === activeLevel + 1 can show its colored sub-region overlay if it has preferences set
+        if (level === activeLevel + 1 && (pCount > 0 || dCount > 0)) {
           const netScore = pCount - dCount;
-
           if (netScore > 0) {
             // 선호 우세 (파란색 / Blue)
-            const opacityVal = Math.min(0.28 + Math.min(netScore, 5) * 0.11, 0.80);
+            const opacityVal = Math.min(0.40 + Math.min(netScore, 5) * 0.10, 0.85);
             return {
               ...base,
               color: '#1d4ed8',
-              weight: Math.max((base.weight as number) || 2, 2.4),
-              opacity: 0.95,
+              weight: 1.5,
+              opacity: 0.9,
               fillColor: '#3b82f6',
               fillOpacity: opacityVal,
             };
           } else if (netScore < 0) {
             // 비선호 우세 (빨간색 / Red)
             const absNet = Math.abs(netScore);
-            const opacityVal = Math.min(0.28 + Math.min(absNet, 5) * 0.11, 0.80);
+            const opacityVal = Math.min(0.40 + Math.min(absNet, 5) * 0.10, 0.85);
             return {
               ...base,
               color: '#b91c1c',
-              weight: Math.max((base.weight as number) || 2, 2.4),
-              opacity: 0.95,
+              weight: 1.5,
+              opacity: 0.9,
               fillColor: '#ef4444',
               fillOpacity: opacityVal,
             };
           } else {
             // 동률 (보라색 / Purple)
             const totalCount = pCount + dCount;
-            const opacityVal = Math.min(0.30 + Math.min(totalCount, 6) * 0.08, 0.75);
+            const opacityVal = Math.min(0.35 + Math.min(totalCount, 6) * 0.08, 0.80);
             return {
               ...base,
               color: '#7e22ce',
-              weight: Math.max((base.weight as number) || 2, 2.4),
-              opacity: 0.95,
+              weight: 1.5,
+              opacity: 0.9,
               fillColor: '#a855f7',
               fillOpacity: opacityVal,
             };
           }
+        }
+
+        // Hide features at lower levels if no preference, or level > activeLevel + 1
+        return {
+          ...base,
+          fillOpacity: 0,
+          opacity: 0,
+          weight: 0,
+        };
+      }
+
+      // If feature is at a higher administrative level than active level (e.g. Level 1 outline when activeLevel is 2)
+      if (level < activeLevel) {
+        return {
+          ...base,
+          fillOpacity: 0,
+          opacity: 0.35,
+          weight: Math.max((base.weight as number) || 1, 1.2),
+        };
+      }
+
+      // Feature is at current activeLevel (level === activeLevel)
+      if (pCount > 0 || dCount > 0) {
+        const netScore = pCount - dCount;
+
+        if (netScore > 0) {
+          // 선호 우세 (파란색 / Blue)
+          const opacityVal = Math.min(0.40 + Math.min(netScore, 5) * 0.10, 0.85);
+          return {
+            ...base,
+            color: '#1d4ed8',
+            weight: Math.max((base.weight as number) || 2, 2.2),
+            opacity: 0.95,
+            fillColor: '#3b82f6',
+            fillOpacity: opacityVal,
+          };
+        } else if (netScore < 0) {
+          // 비선호 우세 (빨간색 / Red)
+          const absNet = Math.abs(netScore);
+          const opacityVal = Math.min(0.40 + Math.min(absNet, 5) * 0.10, 0.85);
+          return {
+            ...base,
+            color: '#b91c1c',
+            weight: Math.max((base.weight as number) || 2, 2.2),
+            opacity: 0.95,
+            fillColor: '#ef4444',
+            fillOpacity: opacityVal,
+          };
+        } else {
+          // 동률 (보라색 / Purple)
+          const totalCount = pCount + dCount;
+          const opacityVal = Math.min(0.35 + Math.min(totalCount, 6) * 0.08, 0.80);
+          return {
+            ...base,
+            color: '#7e22ce',
+            weight: Math.max((base.weight as number) || 2, 2.2),
+            opacity: 0.95,
+            fillColor: '#a855f7',
+            fillOpacity: opacityVal,
+          };
         }
       }
     }
@@ -295,6 +360,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     groups.forEach(({ group, level }) => {
       const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
+      const isInteractive = (level === currentActiveLevel);
 
       group.eachLayer((geoJsonLayer: any) => {
         if (geoJsonLayer.eachLayer) {
@@ -320,6 +386,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             );
 
             layer.setStyle(newStyle);
+
+            const el = layer.getElement ? layer.getElement() : (layer._path || null);
+            if (el) {
+              el.style.pointerEvents = isInteractive ? 'auto' : 'none';
+            }
           });
         }
       });
@@ -358,22 +429,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       return;
     }
 
-    const activeLevelsToDisplay = new Set<AdminLevel>();
-    if (currentLevel === 1) {
-      activeLevelsToDisplay.add(1);
-    } else if (currentLevel === 2) {
-      activeLevelsToDisplay.add(1);
-      activeLevelsToDisplay.add(2);
-    } else if (currentLevel === 3) {
-      activeLevelsToDisplay.add(1);
-      activeLevelsToDisplay.add(2);
-      activeLevelsToDisplay.add(3);
-    } else if (currentLevel === 4) {
-      activeLevelsToDisplay.add(1);
-      activeLevelsToDisplay.add(2);
-      activeLevelsToDisplay.add(3);
-      activeLevelsToDisplay.add(4);
-    }
+    const activeLevelsToDisplay = new Set<AdminLevel>([1, 2, 3, 4]);
 
     ([1, 2, 3, 4] as AdminLevel[]).forEach((lvl) => {
       if (activeLevelsToDisplay.has(lvl)) {
@@ -419,8 +475,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         let typeInfo = feature.properties?.type || ADMIN_LEVEL_INFOS[level].name;
         let displayName = rawName;
 
-        if (level === 4) {
-          typeInfo = '4단계 행정구역';
+        if (level === 3 || level === 4) {
+          typeInfo = '3단계 행정구역';
         }
 
         // Clean hover tooltip
@@ -436,8 +492,18 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           }
         );
 
+        layer.on('add', () => {
+          const lAny = layer as any;
+          const el = lAny.getElement ? lAny.getElement() : (lAny._path || null);
+          if (el) {
+            const isInteractive = (level === activeAdminLevelRef.current);
+            el.style.pointerEvents = isInteractive ? 'auto' : 'none';
+          }
+        });
+
         layer.on({
           mouseover: (e) => {
+            if (level !== activeAdminLevelRef.current) return;
             const target = e.target;
             const targetFeature = target.feature;
             if (!targetFeature) return;
@@ -466,6 +532,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             });
           },
           mouseout: (e) => {
+            if (level !== activeAdminLevelRef.current) return;
             const target = e.target;
             const targetFeature = target.feature;
             if (!targetFeature) return;
@@ -490,6 +557,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             target.setStyle(normStyle);
           },
           click: (e) => {
+            if (level !== activeAdminLevelRef.current) return;
+
             if (e.originalEvent && e.originalEvent.target) {
               (e.originalEvent.target as HTMLElement).blur?.();
             }

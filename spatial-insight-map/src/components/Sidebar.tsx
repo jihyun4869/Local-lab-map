@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Layers className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">수도권 데이터</h1>
+            <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">내가 쓰는 택리지</h1>
             <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Spatia Insight</p>
           </div>
         </div>

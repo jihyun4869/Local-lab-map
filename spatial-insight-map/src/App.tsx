@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LayerVisibility, RegionPreference } from './types';
 import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES } from './data/defaultData';
 import { AdminLevel } from './data/koreaGeoJson';
@@ -18,19 +18,7 @@ export default function App() {
   });
 
   // Region preferences state initialized with sample data
-const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(() => {
-  try {
-    const saved = localStorage.getItem('regionPreferences');
-    return saved ? JSON.parse(saved) : {};
-  } catch (error) {
-    console.error('Failed to parse regionPreferences from localStorage', error);
-    return {};
-  }
-});
-
-useEffect(() => {
-  localStorage.setItem('regionPreferences', JSON.stringify(regionPreferences));
-}, [regionPreferences]);
+  const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(SAMPLE_REGION_PREFERENCES);
 
   // Selected region side panel state
   const [selectedRegion, setSelectedRegion] = useState<{ code: string; name: string } | null>(null);
@@ -89,18 +77,31 @@ useEffect(() => {
 
     const regName = name || regionPreferences[code]?.name || `행정구역 ${code}`;
 
-    // Ensure initial pref object exists ONLY IF NOT ALREADY INITIALIZED!
+    let matchedKey = code;
+
     setRegionPreferences((prev) => {
-      if (prev[code]) {
+      // Find existing matching key by key, code, or name
+      const existingKey = Object.keys(prev).find(
+        (k) =>
+          k === code ||
+          k === regName ||
+          prev[k]?.code === code ||
+          prev[k]?.name === regName ||
+          (regName && prev[k]?.name && (prev[k].name === regName || prev[k].name.includes(regName) || regName.includes(prev[k].name)))
+      );
+
+      if (existingKey) {
+        matchedKey = existingKey;
         return prev;
       }
+
       return {
         ...prev,
         [code]: getInitialRegionPref(code, regName),
       };
     });
 
-    setSelectedRegion({ code, name: regName });
+    setSelectedRegion({ code: matchedKey, name: regName });
   };
 
   // Update Region Preference
@@ -143,7 +144,11 @@ useEffect(() => {
   }, 0);
 
   const activeSelectedRegionPref = selectedRegion
-    ? regionPreferences[selectedRegion.code] || getInitialRegionPref(selectedRegion.code, selectedRegion.name)
+    ? regionPreferences[selectedRegion.code] ||
+      (Object.values(regionPreferences) as RegionPreference[]).find(
+        (p) => p.code === selectedRegion.code || p.name === selectedRegion.name
+      ) ||
+      getInitialRegionPref(selectedRegion.code, selectedRegion.name)
     : null;
 
   return (

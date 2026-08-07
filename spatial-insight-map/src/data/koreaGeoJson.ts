@@ -29,32 +29,32 @@ export const ADMIN_LEVEL_INFOS: Record<AdminLevel, AdminLevelInfo> = {
   2: {
     level: 2,
     name: '기초자치단체',
-    descriptionMain: '자치시 · 자치군 · 자치구',
+    descriptionMain: '자치시 · 자치군 · 자치구 · 일반구',
     descriptionSub: '(통합 자치시 경계)',
-    zoomCondition: '9.5 ≤ Zoom < 11.5',
+    zoomCondition: '9.5 ≤ Zoom < 12.5',
     zoomLabel: '(중간 레벨)',
-    description: '자치시 · 자치군 · 자치구 (통합 자치시 경계)',
-    zoomRangeText: '9.5 ≤ Zoom < 11.5 (중간 레벨)',
+    description: '자치시 · 자치군 · 자치구 · 일반구',
+    zoomRangeText: '9.5 ≤ Zoom < 12.5 (중간 레벨)',
   },
   3: {
     level: 3,
     name: '3단계 행정구역',
-    descriptionMain: '일반구 · 행정시',
-    descriptionSub: '(행정구)',
-    zoomCondition: '11.5 ≤ Zoom < 12.5',
-    zoomLabel: '(확대 레벨)',
-    description: '일반구(행정구) · 행정시',
-    zoomRangeText: '11.5 ≤ Zoom < 12.5 (확대 레벨)',
-  },
-  4: {
-    level: 4,
-    name: '4단계 행정구역',
     descriptionMain: '전국 읍 · 면 · 동',
     descriptionSub: '(행정동 / 법정동)',
     zoomCondition: 'Zoom ≥ 12.5',
-    zoomLabel: '(고배율 확대 레벨)',
+    zoomLabel: '(확대 레벨)',
     description: '전국 읍 · 면 · 동 (행정동 / 법정동)',
-    zoomRangeText: 'Zoom ≥ 12.5 (고배율 확대 레벨)',
+    zoomRangeText: 'Zoom ≥ 12.5 (확대 레벨)',
+  },
+  4: {
+    level: 4,
+    name: '3단계 행정구역',
+    descriptionMain: '전국 읍 · 면 · 동',
+    descriptionSub: '(행정동 / 법정동)',
+    zoomCondition: 'Zoom ≥ 12.5',
+    zoomLabel: '(확대 레벨)',
+    description: '전국 읍 · 면 · 동 (행정동 / 법정동)',
+    zoomRangeText: 'Zoom ≥ 12.5 (확대 레벨)',
   },
 };
 
@@ -148,80 +148,49 @@ export async function fetchNationwideGeoJson(): Promise<{
       }
     }
 
-    // 2 & 3. 기초자치단체 (시/군/구) 및 일반구 (Level 2 vs Level 3 분리)
+    // 2. 기초자치단체 (시/군/구 및 일반구) -> Level 2
     if (resSigungu && resSigungu.ok) {
       const data = await resSigungu.json();
       if (data && data.features) {
-        const l2Features: Feature[] = [];
-        const l3Features: Feature[] = [];
-
-        data.features.forEach((f: Feature) => {
+        const l2Features: Feature[] = data.features.map((f: Feature) => {
           const rawName: string = f.properties?.name || f.properties?.SIG_KOR_NM || '';
-          
-          // "고양시 덕양구", "성남시 분당구", "수원시 영통구" 같은 이름 처리
-          const parts = rawName.split(' ');
-          let districtName = rawName;
-          let cityName = '';
-          if (parts.length > 1) {
-            cityName = parts[0]; // 예: 고양시
-            districtName = parts[1]; // 예: 덕양구
-          }
-
-          const isGeneralDistrict = NON_AUTONOMOUS_DISTRICT_NAMES.has(districtName) || NON_AUTONOMOUS_DISTRICT_NAMES.has(rawName);
-
-          if (isGeneralDistrict) {
-            // 일반구(행정구) -> Level 3 로 분류
-            l3Features.push({
-              ...f,
-              properties: {
-                ...f.properties,
-                name: districtName,
-                parentCity: cityName,
-                type: '3단계 행정구역(일반구)',
-                level: 3,
-              }
-            });
-          } else {
-            // 자치시/자치군/자치구 -> Level 2 로 분류
-            l2Features.push({
-              ...f,
-              properties: {
-                ...f.properties,
-                name: rawName,
-                type: '기초자치단체',
-                level: 2,
-              }
-            });
-          }
+          return {
+            ...f,
+            properties: {
+              ...f.properties,
+              name: rawName,
+              type: '기초자치단체',
+              level: 2,
+            }
+          };
         });
 
         level2 = { type: 'FeatureCollection', features: l2Features };
-        level3 = { type: 'FeatureCollection', features: l3Features };
       }
     }
 
-    // 4. 전국 읍/면/동 (Level 4)
+    // 3. 전국 읍/면/동 -> Level 3 (3단계 행정구역)
     if (resSubmun && resSubmun.ok) {
       const data = await resSubmun.json();
       if (data && data.features) {
-        level4 = {
-          type: 'FeatureCollection',
-          features: data.features.map((f: Feature) => {
-            const rawName: string = f.properties?.name || f.properties?.EMD_KOR_NM || '읍/면/동';
-            const nameParts = rawName.split(' ');
-            const dongName = nameParts[nameParts.length - 1]; // 마지막 단어 (예: 화정동, 삼성동)
-            return {
-              ...f,
-              properties: {
-                ...f.properties,
-                name: dongName || rawName,
-                fullName: rawName,
-                type: '4단계 행정구역(읍/면/동)',
-                level: 4,
-              }
-            };
-          })
-        };
+        const l3Features: Feature[] = data.features.map((f: Feature) => {
+          const rawName: string = f.properties?.name || f.properties?.EMD_KOR_NM || '읍/면/동';
+          const nameParts = rawName.split(' ');
+          const dongName = nameParts[nameParts.length - 1]; // 마지막 단어 (예: 화정동, 삼성동)
+          return {
+            ...f,
+            properties: {
+              ...f.properties,
+              name: dongName || rawName,
+              fullName: rawName,
+              type: '3단계 행정구역(읍/면/동)',
+              level: 3,
+            }
+          };
+        });
+
+        level3 = { type: 'FeatureCollection', features: l3Features };
+        level4 = level3;
       }
     }
 

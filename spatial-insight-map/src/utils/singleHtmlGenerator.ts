@@ -4,7 +4,7 @@ export function generateStandaloneHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>수도권 데이터 시각화 (Spatia Insight Pro)</title>
+  <title>내가 쓰는 택리지 (Spatia Insight Pro)</title>
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Leaflet JS -->
@@ -36,7 +36,7 @@ export function generateStandaloneHtml(): string {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="2" x2="8" y2="18" stroke-width="2.5"/><line x1="16" y1="6" x2="16" y2="22" stroke-width="2.5"/></svg>
           </div>
           <div class="min-w-0">
-            <h1 class="text-sm font-bold text-gray-900 leading-tight truncate">수도권 데이터</h1>
+            <h1 class="text-sm font-bold text-gray-900 leading-tight truncate">내가 쓰는 택리지</h1>
             <p class="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Spatia Insight</p>
           </div>
         </div>

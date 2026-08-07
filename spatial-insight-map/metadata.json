@@ -1,6 +1,6 @@
 {
-  "name": "수도권 선호/비선호 지도",
-  "description": "Leaflet 기반 수도권(서울·경기) 행정구역별 선호 및 비선호 데이터 수집과 시각화 웹 애플리케이션",
+  "name": "내가 쓰는 택리지",
+  "description": "Leaflet 기반 전국/수도권 행정구역별 선호 및 비선호 데이터 수집과 시각화 웹 애플리케이션",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
