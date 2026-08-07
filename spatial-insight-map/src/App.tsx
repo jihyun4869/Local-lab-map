@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayerVisibility, RegionPreference } from './types';
 import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES } from './data/defaultData';
 import { AdminLevel } from './data/koreaGeoJson';
@@ -18,7 +18,22 @@ export default function App() {
   });
 
   // Region preferences state initialized with sample data
-  const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(SAMPLE_REGION_PREFERENCES);
+ const [regionPreferences, setRegionPreferences] = useState<Record<string, any>>(() => {
+  try {
+    const saved = localStorage.getItem('regionPreferences');
+    return saved ? JSON.parse(saved) : {};
+  } catch (error) {
+    return {};
+  }
+});
+
+useEffect(() => {
+  try {
+    localStorage.setItem('regionPreferences', JSON.stringify(regionPreferences));
+  } catch (error) {
+    console.error(error);
+  }
+}, [regionPreferences]);
 
   // Selected region side panel state
   const [selectedRegion, setSelectedRegion] = useState<{ code: string; name: string } | null>(null);
