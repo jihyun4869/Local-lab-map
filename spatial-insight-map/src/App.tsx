@@ -19,8 +19,13 @@ export default function App() {
 
   // Region preferences state initialized with sample data
 const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(() => {
-  const saved = localStorage.getItem('regionPreferences');
-  return saved ? JSON.parse(saved) : {};
+  try {
+    const saved = localStorage.getItem('regionPreferences');
+    return saved ? JSON.parse(saved) : {};
+  } catch (error) {
+    console.error('Failed to parse regionPreferences from localStorage', error);
+    return {};
+  }
 });
 
 useEffect(() => {
