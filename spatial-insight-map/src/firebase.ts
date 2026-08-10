@@ -1,7 +1,7 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyB6YRZMVAvfKHLChCXWl_hj8WuVsvOnCJk",
   authDomain: "spatial-insight-map.firebaseapp.com",
   projectId: "spatial-insight-map",
@@ -10,5 +10,7 @@ const firebaseConfig = {
   appId: "1:756526104240:web:8bb12a64ff51372776c575"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app);
+
+export default app;
