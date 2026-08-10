@@ -34,6 +34,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   zoomInfo?: { zoom: number; level: AdminLevel };
+  isSyncConnected?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,7 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectRegion,
   isCollapsed,
   onToggleCollapse,
-  zoomInfo
+  zoomInfo,
+  isSyncConnected = true
 }) => {
   const currentLevelInfo = zoomInfo ? ADMIN_LEVEL_INFOS[zoomInfo.level] : ADMIN_LEVEL_INFOS[2];
   const evaluatedRegions = (Object.values(regionPreferences) as RegionPreference[]).filter(r => {
@@ -140,7 +142,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">내가 쓰는 택리지</h1>
-            <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Spatia Insight</p>
+            <div className="flex items-center space-x-1.5 mt-0.5">
+              <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Spatia Insight</span>
+              <span
+                className={`inline-flex items-center space-x-1 px-1.5 py-0.2 rounded-full text-[9px] font-medium ${
+                  isSyncConnected
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-600 border border-amber-200'
+                }`}
+                title={isSyncConnected ? 'Firebase Firestore 실시간 연결됨' : 'Firebase 연결 확인 중'}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isSyncConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
+                <span>{isSyncConnected ? '실시간 동기화' : '연결 중'}</span>
+              </span>
+            </div>
           </div>
         </div>
 
