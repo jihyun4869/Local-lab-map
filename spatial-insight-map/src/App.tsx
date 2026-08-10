@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import { LayerVisibility, RegionPreference } from './types';
 import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES } from './data/defaultData';
 import { AdminLevel } from './data/koreaGeoJson';
@@ -18,22 +20,64 @@ export default function App() {
   });
 
   // Region preferences state initialized with sample data
- const [regionPreferences, setRegionPreferences] = useState<Record<string, any>>(() => {
-  try {
-    const saved = localStorage.getItem('regionPreferences');
-    return saved ? JSON.parse(saved) : {};
-  } catch (error) {
-    return {};
-  }
-});
+  const [regionPreferences, setRegionPreferences] = useState<Record<string, RegionPreference>>(SAMPLE_REGION_PREFERENCES);
 
-useEffect(() => {
-  try {
-    localStorage.setItem('regionPreferences', JSON.stringify(regionPreferences));
-  } catch (error) {
-    console.error(error);
-  }
-}, [regionPreferences]);
+  // Firestore sync state & refs
+  const [isSyncConnected, setIsSyncConnected] = useState<boolean>(false);
+  const lastLocalSerializedRef = useRef<string>('');
+  const isInitialSyncDoneRef = useRef<boolean>(false);
+
+  // 1. Subscribe to Firestore shared document ('preferences/shared') in real-time
+  useEffect(() => {
+    const docRef = doc(db, 'preferences', 'shared');
+
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        setIsSyncConnected(true);
+        if (docSnap.exists()) {
+          const remoteData = docSnap.data();
+          if (remoteData && remoteData.data) {
+            const serialized = JSON.stringify(remoteData.data);
+            if (serialized !== lastLocalSerializedRef.current) {
+              lastLocalSerializedRef.current = serialized;
+              setRegionPreferences(remoteData.data);
+            }
+          }
+        } else {
+          // Document doesn't exist yet: initialize with default sample preferences
+          const initialSerialized = JSON.stringify(SAMPLE_REGION_PREFERENCES);
+          lastLocalSerializedRef.current = initialSerialized;
+          setDoc(docRef, {
+            data: SAMPLE_REGION_PREFERENCES,
+            updatedAt: new Date().toISOString(),
+          }).catch((err) => console.error('Error initializing Firestore:', err));
+        }
+        isInitialSyncDoneRef.current = true;
+      },
+      (error) => {
+        console.error('Firestore onSnapshot error:', error);
+        setIsSyncConnected(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Automatically push local regionPreferences changes to Firestore
+  useEffect(() => {
+    if (!isInitialSyncDoneRef.current) return;
+
+    const serialized = JSON.stringify(regionPreferences);
+    if (serialized !== lastLocalSerializedRef.current) {
+      lastLocalSerializedRef.current = serialized;
+      const docRef = doc(db, 'preferences', 'shared');
+      setDoc(docRef, {
+        data: regionPreferences,
+        updatedAt: new Date().toISOString(),
+      }).catch((err) => console.error('Error writing to Firestore:', err));
+    }
+  }, [regionPreferences]);
 
   // Selected region side panel state
   const [selectedRegion, setSelectedRegion] = useState<{ code: string; name: string } | null>(null);
@@ -183,6 +227,7 @@ useEffect(() => {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         zoomInfo={zoomInfo}
+        isSyncConnected={isSyncConnected}
       />
 
       {/* Main Map Area */}
