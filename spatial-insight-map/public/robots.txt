@@ -1,1 +1,4 @@
+User-agent: *
+Allow: /
 
+Sitemap: https://local-lab-map-t76i.vercel.app/sitemap.xml
