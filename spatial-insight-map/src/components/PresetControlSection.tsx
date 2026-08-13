@@ -147,13 +147,13 @@ export const PresetControlSection: React.FC<PresetControlSectionProps> = ({
         </button>
       </div>
 
-      {/* 1-Line Action Toolbar directly below the active/selected preset icon */}
+      {/* Action Toolbar directly below the active/selected preset icon */}
       {activePreset && (
-        <div className="mt-2 p-2 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-md flex items-center justify-between gap-2 text-xs animate-in fade-in zoom-in-95 duration-200">
-          {/* Left: Selected Preset Name or Inline Edit Input */}
-          <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+        <div className="mt-2 p-2.5 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-md space-y-2 text-xs animate-in fade-in zoom-in-95 duration-200">
+          {/* Top Row: Selected Preset Name & Count / Rename / Delete confirm */}
+          <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
             {editingPresetId === activePreset.id ? (
-              <form onSubmit={(e) => handleSaveRename(activePreset.id, e)} className="flex items-center space-x-1 w-full">
+              <form onSubmit={(e) => handleSaveRename(activePreset.id, e)} className="flex items-center gap-1.5 w-full">
                 <input
                   type="text"
                   value={editingName}
@@ -161,75 +161,78 @@ export const PresetControlSection: React.FC<PresetControlSectionProps> = ({
                   onBlur={(e) => handleSaveRename(activePreset.id, e)}
                   autoFocus
                   maxLength={25}
-                  className="w-full px-2 py-0.5 text-xs font-bold rounded-md bg-slate-800 border border-indigo-400 text-white outline-none"
+                  className="flex-1 px-2 py-0.5 text-xs font-bold rounded-md bg-slate-800 border border-indigo-400 text-white outline-none"
                 />
-                <button type="submit" className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-0.5 rounded-md shrink-0 cursor-pointer">
+                <button type="submit" className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1 rounded-md shrink-0 cursor-pointer">
                   저장
                 </button>
               </form>
             ) : deletingPresetId === activePreset.id ? (
-              <span className="text-[11px] font-bold text-red-400 truncate">
-                삭제하시겠습니까?
-              </span>
-            ) : (
-              <div className="flex items-center space-x-1.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0 animate-pulse" />
-                <span className="font-bold text-white text-[11px] truncate">{activePreset.name}</span>
-                <span className="text-[10px] text-slate-400 font-medium shrink-0">({activeEvaluatedCount}개)</span>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Actions in 1 clean horizontal row */}
-          <div className="flex items-center space-x-1 shrink-0">
-            {deletingPresetId === activePreset.id ? (
-              <>
-                <button
-                  onClick={(e) => handleConfirmDelete(activePreset.id, e)}
-                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-lg shadow-2xs transition cursor-pointer"
-                >
-                  삭제
-                </button>
-                <button
-                  onClick={handleCancelDelete}
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-medium rounded-lg transition cursor-pointer"
-                >
-                  취소
-                </button>
-              </>
-            ) : editingPresetId === activePreset.id ? null : (
-              <>
-                {onUpdatePreset && (
+              <div className="flex items-center justify-between w-full">
+                <span className="text-[11px] font-bold text-red-400 truncate">
+                  ‘{activePreset.name}’ 삭제할까요?
+                </span>
+                <div className="flex items-center space-x-1 shrink-0">
                   <button
-                    onClick={() => onUpdatePreset(activePreset.id)}
-                    className="px-2 py-1 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center space-x-1"
-                    title="현재 지도의 컬러링으로 이 레이어 덮어쓰기"
+                    onClick={(e) => handleConfirmDelete(activePreset.id, e)}
+                    className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-md transition cursor-pointer"
                   >
-                    <Save className="w-3 h-3 text-indigo-400" />
-                    <span>덮어쓰기</span>
+                    삭제
                   </button>
-                )}
-
-                <button
-                  onClick={(e) => handleStartRename(activePreset, e)}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center space-x-1"
-                  title="레이어 이름 수정"
-                >
-                  <Pencil className="w-3 h-3 text-slate-400" />
-                  <span>이름편집</span>
-                </button>
-
-                <button
-                  onClick={() => setDeletingPresetId(activePreset.id)}
-                  className="px-2 py-1 bg-slate-800 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center space-x-1"
-                  title="레이어 삭제"
-                >
-                  <Trash2 className="w-3 h-3 text-red-400" />
-                  <span>삭제</span>
-                </button>
+                  <button
+                    onClick={handleCancelDelete}
+                    className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-medium rounded-md transition cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0 animate-pulse" />
+                  <span className="font-bold text-white text-[11px] truncate">{activePreset.name}</span>
+                </div>
+                <span className="text-[10px] font-semibold text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded-full border border-indigo-800/60 shrink-0">
+                  {activeEvaluatedCount}개 평가 구역
+                </span>
               </>
             )}
           </div>
+
+          {/* Bottom Row: Actions in 3 equal grid columns */}
+          {deletingPresetId !== activePreset.id && editingPresetId !== activePreset.id && (
+            <div className="grid grid-cols-3 gap-1 pt-0.5">
+              {onUpdatePreset && (
+                <button
+                  onClick={() => onUpdatePreset(activePreset.id)}
+                  className="px-1.5 py-1.5 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center justify-center space-x-1 min-w-0"
+                  title="현재 지도의 컬러링으로 이 레이어 덮어쓰기"
+                >
+                  <Save className="w-3 h-3 text-indigo-400 shrink-0" />
+                  <span className="truncate">덮어쓰기</span>
+                </button>
+              )}
+
+              <button
+                onClick={(e) => handleStartRename(activePreset, e)}
+                className="px-1.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center justify-center space-x-1 min-w-0"
+                title="레이어 이름 수정"
+              >
+                <Pencil className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate">이름편집</span>
+              </button>
+
+              <button
+                onClick={() => setDeletingPresetId(activePreset.id)}
+                className="px-1.5 py-1.5 bg-slate-800 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-slate-700 font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center justify-center space-x-1 min-w-0"
+                title="레이어 삭제"
+              >
+                <Trash2 className="w-3 h-3 text-red-400 shrink-0" />
+                <span className="truncate">삭제</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
