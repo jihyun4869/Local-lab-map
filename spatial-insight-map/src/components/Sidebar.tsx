@@ -15,10 +15,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Tag,
-  Eye
+  Eye,
+  BookmarkPlus
 } from 'lucide-react';
-import { LayerVisibility, RegionPreference } from '../types';
+import { LayerVisibility, RegionPreference, ColoringPreset, LegendColors, DEFAULT_LEGEND_COLORS } from '../types';
 import { AdminLevel, ADMIN_LEVEL_INFOS } from '../data/koreaGeoJson';
+import { PresetControlSection } from './PresetControlSection';
+import { ShapeToolbarControls, ShapeToolbarProps } from './ShapeToolbar';
 
 interface SidebarProps {
   layerVisibility: LayerVisibility;
@@ -35,6 +38,22 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   zoomInfo?: { zoom: number; level: AdminLevel };
   isSyncConnected?: boolean;
+
+  // Legend colors
+  legendColors: LegendColors;
+  onUpdateLegendColors: (colors: LegendColors) => void;
+
+  // Preset management props
+  savedPresets: ColoringPreset[];
+  activePresetId: string | null;
+  onSelectPreset: (presetId: string) => void;
+  onOpenSavePresetModal: () => void;
+  onRenamePreset: (presetId: string, newName: string) => void;
+  onDeletePreset: (presetId: string) => void;
+  onUpdatePreset?: (presetId: string) => void;
+
+  // Shape Toolbar props for mobile embedded controls
+  shapeToolbarProps?: ShapeToolbarProps;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -51,14 +70,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
   zoomInfo,
-  isSyncConnected = true
+  isSyncConnected = true,
+  legendColors,
+  onUpdateLegendColors,
+  savedPresets,
+  activePresetId,
+  onSelectPreset,
+  onOpenSavePresetModal,
+  onRenamePreset,
+  onDeletePreset,
+  onUpdatePreset,
+  shapeToolbarProps,
 }) => {
   const currentLevelInfo = zoomInfo ? ADMIN_LEVEL_INFOS[zoomInfo.level] : ADMIN_LEVEL_INFOS[2];
-  const evaluatedRegions = (Object.values(regionPreferences) as RegionPreference[]).filter(r => {
+  const evaluatedRegionsRaw = (Object.values(regionPreferences) as RegionPreference[]).filter(r => {
     const p = r.prefItems.some(i => i.checked);
     const d = r.disprefItems.some(i => i.checked);
     return p || d;
   });
+
+  const seenCodes = new Set<string>();
+  const evaluatedRegions: RegionPreference[] = [];
+  for (const reg of evaluatedRegionsRaw) {
+    const identifier = reg.code || reg.name;
+    if (identifier && !seenCodes.has(identifier)) {
+      seenCodes.add(identifier);
+      evaluatedRegions.push(reg);
+    }
+  }
 
   if (isCollapsed) {
     return (
@@ -101,6 +140,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="w-8 border-t border-gray-200 my-2" />
 
+          <button
+            onClick={onOpenSavePresetModal}
+            title="현재 컬러링 저장 (+)"
+            className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer"
+          >
+            <BookmarkPlus className="w-4 h-4" />
+          </button>
+
           {/* Sample Data */}
           <button
             onClick={onLoadSampleData}
@@ -141,9 +188,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Layers className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">내가 쓰는 택리지</h1>
+            <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">동네연구소</h1>
             <div className="flex items-center space-x-1.5 mt-0.5">
-              <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Spatia Insight</span>
+              <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider truncate">Local Lab</span>
               <span
                 className={`inline-flex items-center space-x-1 px-1.5 py-0.2 rounded-full text-[9px] font-medium ${
                   isSyncConnected
@@ -169,8 +216,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* Scrollable Container (Layer Control + Stats & Evaluated Regions) */}
+      {/* Scrollable Container (Presets + Layer Control + Stats & Evaluated Regions) */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
+        {/* Saved Coloring Presets Control Section */}
+        <PresetControlSection
+          savedPresets={savedPresets}
+          activePresetId={activePresetId}
+          onSelectPreset={onSelectPreset}
+          onOpenSaveModal={onOpenSavePresetModal}
+          onRenamePreset={onRenamePreset}
+          onDeletePreset={onDeletePreset}
+          onUpdatePreset={onUpdatePreset}
+          onClearAllColoring={onResetData}
+        />
+
         {/* Layer Control Panel */}
         <div className="space-y-2 pb-3 border-b border-gray-100">
           <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
@@ -271,6 +330,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
             </div>
+
+            {/* 3. Shapes Drawing Layer ('도형삽입') */}
+            <div className="space-y-1">
+              <label
+                className={`flex items-center justify-between p-2 rounded-lg border transition-colors cursor-pointer ${
+                  layerVisibility.shapes !== false
+                    ? 'bg-amber-50/60 border-amber-200 text-gray-900 font-semibold'
+                    : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></div>
+                  <span className="text-xs font-bold text-gray-800">도형삽입</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={layerVisibility.shapes !== false}
+                  onChange={() => onToggleLayer('shapes')}
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                />
+              </label>
+
+              {/* Render Shape Controls embedded inside sidebar on mobile screens */}
+              {layerVisibility.shapes !== false && shapeToolbarProps && (
+                <div className="pt-1 sm:hidden">
+                  <ShapeToolbarControls {...shapeToolbarProps} isEmbedded={true} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -317,36 +405,76 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Legend Card */}
         <div className="bg-slate-900 rounded-xl p-3 text-white shadow-inner border border-slate-800">
-          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>데이터 범례</span>
-            <Palette className="w-3 h-3 text-indigo-400" />
-          </h2>
+          <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-slate-800/80">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold text-slate-200 whitespace-nowrap">데이터 범례</span>
+                <span className="text-[10px] text-slate-400 font-normal whitespace-nowrap">(색상 변경)</span>
+              </div>
+            </div>
+            <button
+              onClick={() => onUpdateLegendColors(DEFAULT_LEGEND_COLORS)}
+              className="flex items-center gap-1 text-[10px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-md border border-slate-700/80 transition cursor-pointer shrink-0 whitespace-nowrap active:scale-95"
+              title="범례 색상을 기본설정으로 초기화"
+            >
+              <RotateCcw className="w-2.5 h-2.5 text-indigo-400" />
+              <span>색상 초기화</span>
+            </button>
+          </div>
+
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-300 font-medium">선호 우세</span>
-              <div className="flex gap-1 items-center">
-                <div className="w-2.5 h-2.5 rounded-xs bg-blue-400/50 border border-blue-400/40" title="옅음 (1~2개)"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-blue-500/80" title="보통 (3~4개)"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-blue-600 shadow-2xs" title="짙음 (5개 이상)"></div>
+            {/* 선호 우세 */}
+            <div className="flex items-center justify-between text-[11px] relative group cursor-pointer">
+              <span className="text-slate-300 font-medium whitespace-nowrap">선호 우세</span>
+              <div className="flex gap-1 items-center relative shrink-0">
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.prefColor, opacity: 0.45 }} title="옅음 (1~2개)"></div>
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.prefColor, opacity: 0.75 }} title="보통 (3~4개)"></div>
+                <div className="w-2.5 h-2.5 rounded-xs shadow-2xs border border-white/20" style={{ backgroundColor: legendColors.prefColor, opacity: 1.0 }} title="짙음 (5개 이상)"></div>
+                <input
+                  type="color"
+                  value={legendColors.prefColor}
+                  onChange={(e) => onUpdateLegendColors({ ...legendColors, prefColor: e.target.value })}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  title="클릭하여 선호 우세 색상 선택"
+                />
               </div>
             </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-300 font-medium">선호/비선호 동률</span>
-              <div className="flex gap-1 items-center">
-                <div className="w-2.5 h-2.5 rounded-xs bg-purple-400/50 border border-purple-400/40" title="옅음"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-purple-500/80" title="보통"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-purple-600 shadow-2xs" title="짙음"></div>
+
+            {/* 선호/비선호 동률 */}
+            <div className="flex items-center justify-between text-[11px] relative group cursor-pointer">
+              <span className="text-slate-300 font-medium whitespace-nowrap">선호/비선호 동률</span>
+              <div className="flex gap-1 items-center relative shrink-0">
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.tieColor, opacity: 0.45 }} title="옅음"></div>
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.tieColor, opacity: 0.75 }} title="보통"></div>
+                <div className="w-2.5 h-2.5 rounded-xs shadow-2xs border border-white/20" style={{ backgroundColor: legendColors.tieColor, opacity: 1.0 }} title="짙음"></div>
+                <input
+                  type="color"
+                  value={legendColors.tieColor}
+                  onChange={(e) => onUpdateLegendColors({ ...legendColors, tieColor: e.target.value })}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  title="클릭하여 동률 색상 선택"
+                />
               </div>
             </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-300 font-medium">비선호 우세</span>
-              <div className="flex gap-1 items-center">
-                <div className="w-2.5 h-2.5 rounded-xs bg-red-400/50 border border-red-400/40" title="옅음"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-red-500/80" title="보통"></div>
-                <div className="w-2.5 h-2.5 rounded-xs bg-red-600 shadow-2xs" title="짙음"></div>
+
+            {/* 비선호 우세 */}
+            <div className="flex items-center justify-between text-[11px] relative group cursor-pointer">
+              <span className="text-slate-300 font-medium whitespace-nowrap">비선호 우세</span>
+              <div className="flex gap-1 items-center relative shrink-0">
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.disprefColor, opacity: 0.45 }} title="옅음"></div>
+                <div className="w-2.5 h-2.5 rounded-xs border border-white/20" style={{ backgroundColor: legendColors.disprefColor, opacity: 0.75 }} title="보통"></div>
+                <div className="w-2.5 h-2.5 rounded-xs shadow-2xs border border-white/20" style={{ backgroundColor: legendColors.disprefColor, opacity: 1.0 }} title="짙음"></div>
+                <input
+                  type="color"
+                  value={legendColors.disprefColor}
+                  onChange={(e) => onUpdateLegendColors({ ...legendColors, disprefColor: e.target.value })}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  title="클릭하여 비선호 우세 색상 선택"
+                />
               </div>
             </div>
           </div>
+
           <div className="text-[9px] text-slate-400 mt-2 pt-1.5 border-t border-slate-800/80 flex justify-between">
             <span>← 항목 적음 (옅음)</span>
             <span>항목 많음 (짙음) →</span>
@@ -394,12 +522,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               <div className="space-y-1 max-h-32 overflow-y-auto pr-0.5">
-                {evaluatedRegions.map((reg) => {
+                {evaluatedRegions.map((reg, idx) => {
                   const pCount = reg.prefItems.filter((i) => i.checked).length;
                   const dCount = reg.disprefItems.filter((i) => i.checked).length;
                   return (
                     <div
-                      key={reg.code}
+                      key={`${reg.code || reg.name}-${idx}`}
                       onClick={() => onSelectRegion(reg.code, reg.name)}
                       className="flex items-center justify-between p-2 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200/60 transition cursor-pointer text-xs"
                     >

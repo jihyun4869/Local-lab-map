@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { Layers, Globe, Eye, Loader2 } from 'lucide-react';
-import { LayerVisibility, RegionPreference } from '../types';
+import { Layers, Globe, Eye, Loader2, Shapes } from 'lucide-react';
+import { LayerVisibility, RegionPreference, LegendColors, DEFAULT_LEGEND_COLORS, DrawnShape, ShapeToolType } from '../types';
+import { ShapeToolbar } from './ShapeToolbar';
+import { ShapeOverlay } from './ShapeOverlay';
 import {
   AdminLevel,
   ADMIN_LEVEL_INFOS,
@@ -16,7 +18,43 @@ interface MapContainerProps {
   onSelectRegion: (code: string | null, name?: string) => void;
   isSidebarCollapsed: boolean;
   onZoomChange?: (zoom: number, activeLevel: AdminLevel) => void;
+  legendColors?: LegendColors;
+  shapes: DrawnShape[];
+  onAddShape: (shape: DrawnShape) => void;
+  onUpdateShape: (shape: DrawnShape) => void;
+  onDeleteShape: (id: string) => void;
+  onClearAllShapes: () => void;
+
+  // Controlled shape tool state (optional)
+  activeTool?: ShapeToolType;
+  onSelectTool?: (tool: ShapeToolType) => void;
+  strokeColor?: string;
+  onChangeStrokeColor?: (color: string) => void;
+  fillColor?: string;
+  onChangeFillColor?: (color: string) => void;
+  strokeWidth?: number;
+  onChangeStrokeWidth?: (width: number) => void;
+  fontSize?: number;
+  onChangeFontSize?: (size: number) => void;
+  selectedShapeId?: string | null;
+  onSelectShapeId?: (id: string | null) => void;
 }
+
+const darkenHexColor = (hex: string, amount: number = 25): string => {
+  if (!hex || !hex.startsWith('#')) return hex || '#000000';
+  let color = hex.replace('#', '');
+  if (color.length === 3) {
+    color = color.split('').map((c) => c + c).join('');
+  }
+  const num = parseInt(color, 16);
+  let r = (num >> 16) - Math.round(255 * (amount / 100));
+  let g = ((num >> 8) & 0x00ff) - Math.round(255 * (amount / 100));
+  let b = (num & 0x0000ff) - Math.round(255 * (amount / 100));
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+};
 
 export const MapContainer: React.FC<MapContainerProps> = ({
   layerVisibility,
@@ -25,14 +63,60 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   onSelectRegion,
   isSidebarCollapsed,
   onZoomChange,
+  legendColors = DEFAULT_LEGEND_COLORS,
+  shapes = [],
+  onAddShape,
+  onUpdateShape,
+  onDeleteShape,
+  onClearAllShapes,
+  activeTool: controlledActiveTool,
+  onSelectTool,
+  strokeColor: controlledStrokeColor,
+  onChangeStrokeColor,
+  fillColor: controlledFillColor,
+  onChangeFillColor,
+  strokeWidth: controlledStrokeWidth,
+  onChangeStrokeWidth,
+  fontSize: controlledFontSize,
+  onChangeFontSize,
+  selectedShapeId: controlledSelectedShapeId,
+  onSelectShapeId,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+
+  // Local fallback Drawing Tools State if controlled props are not passed
+  const [localActiveTool, setLocalActiveTool] = useState<ShapeToolType>('pointer');
+  const [localStrokeColor, setLocalStrokeColor] = useState<string>('#ef4444');
+  const [localFillColor, setLocalFillColor] = useState<string>('none');
+  const [localStrokeWidth, setLocalStrokeWidth] = useState<number>(2);
+  const [localFontSize, setLocalFontSize] = useState<number>(14);
+  const [localSelectedShapeId, setLocalSelectedShapeId] = useState<string | null>(null);
+  const [isShapeToolbarVisible, setIsShapeToolbarVisible] = useState<boolean>(true);
+
+  const activeTool = controlledActiveTool !== undefined ? controlledActiveTool : localActiveTool;
+  const setActiveTool = onSelectTool || setLocalActiveTool;
+
+  const strokeColor = controlledStrokeColor !== undefined ? controlledStrokeColor : localStrokeColor;
+  const setStrokeColor = onChangeStrokeColor || setLocalStrokeColor;
+
+  const fillColor = controlledFillColor !== undefined ? controlledFillColor : localFillColor;
+  const setFillColor = onChangeFillColor || setLocalFillColor;
+
+  const strokeWidth = controlledStrokeWidth !== undefined ? controlledStrokeWidth : localStrokeWidth;
+  const setStrokeWidth = onChangeStrokeWidth || setLocalStrokeWidth;
+
+  const fontSize = controlledFontSize !== undefined ? controlledFontSize : localFontSize;
+  const setFontSize = onChangeFontSize || setLocalFontSize;
+
+  const selectedShapeId = controlledSelectedShapeId !== undefined ? controlledSelectedShapeId : localSelectedShapeId;
+  const setSelectedShapeId = onSelectShapeId || setLocalSelectedShapeId;
 
   // Keep state refs up to date to prevent closure staleness in event handlers
   const regionPreferencesRef = useRef(regionPreferences);
   const layerVisibilityRef = useRef(layerVisibility);
   const selectedRegionCodeRef = useRef(selectedRegionCode);
+  const legendColorsRef = useRef(legendColors);
 
   useEffect(() => {
     regionPreferencesRef.current = regionPreferences;
@@ -45,6 +129,41 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   useEffect(() => {
     selectedRegionCodeRef.current = selectedRegionCode;
   }, [selectedRegionCode]);
+
+  useEffect(() => {
+    legendColorsRef.current = legendColors;
+  }, [legendColors]);
+
+  const isSidebarCollapsedRef = useRef(isSidebarCollapsed);
+  useEffect(() => {
+    isSidebarCollapsedRef.current = isSidebarCollapsed;
+  }, [isSidebarCollapsed]);
+
+  // Moves camera to center region between Left Banner (expanded or collapsed) and Right Side Panel/Popup
+  const moveToRegion = useCallback((bounds: L.LatLngBounds) => {
+    if (!mapInstanceRef.current || !bounds || !bounds.isValid()) return;
+
+    // Mobile check: Do NOT move camera in mobile environment
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+
+    // Left banner width: 64px if collapsed, 320px if expanded
+    const leftPadding = isSidebarCollapsedRef.current ? 64 : 320;
+    // Right popup/panel width: 384px
+    const rightPadding = 384;
+
+    map.fitBounds(bounds, {
+      paddingTL: [leftPadding + 30, 50],
+      paddingBR: [rightPadding + 30, 50],
+      maxZoom: Math.max(map.getZoom(), 12),
+      animate: true,
+      duration: 0.8,
+    });
+  }, []);
 
   // Read Map API key from environment variables
   const mapApiKey =
@@ -92,6 +211,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     activeLevel: AdminLevel,
     preferences: Record<string, RegionPreference>,
     showPrefLayer: boolean,
+    showBoundary: boolean,
     isSelected: boolean
   ): L.PathOptions => {
     const isSatellite = mapTypeRef.current === 'satellite';
@@ -100,92 +220,98 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     let opacity = 0.55;
     let dashArray: string | undefined = undefined;
     let fillColor = '#3b82f6';
-    let fillOpacity = 0.02;
+    let fillOpacity = 0.0;
 
-    if (level < activeLevel) {
-      // 상위 레벨 경계면: 더 진하고 두껍게 처리하여 하위 구역과 완벽히 구분
-      const diff = activeLevel - level;
-      if (isSatellite) {
-        // 위성 지도 모드: 어두운 배경에서 확연히 눈에 띄도록 선명한 흰색(#ffffff) 경계선 적용
-        color = '#ffffff';
-        weight = diff === 1 ? 2.8 : diff === 2 ? 3.2 : 3.6;
-        opacity = 0.95;
-      } else {
-        if (diff === 1) {
-          color = level === 1 ? '#020617' : level === 2 ? '#0f172a' : '#1e293b';
-          weight = 2.8;
-          opacity = 0.92;
-        } else if (diff === 2) {
-          color = '#020617';
-          weight = 3.2;
+    if (showBoundary) {
+      if (level < activeLevel) {
+        // 상위 레벨 경계면: 더 진하고 두껍게 처리하여 하위 구역과 완벽히 구분
+        const diff = activeLevel - level;
+        if (isSatellite) {
+          // 위성 지도 모드: 어두운 배경에서 확연히 눈에 띄도록 선명한 흰색(#ffffff) 경계선 적용
+          color = '#ffffff';
+          weight = diff === 1 ? 2.8 : diff === 2 ? 3.2 : 3.6;
           opacity = 0.95;
         } else {
-          color = '#020617';
-          weight = 3.6;
-          opacity = 0.95;
+          if (diff === 1) {
+            color = level === 1 ? '#020617' : level === 2 ? '#0f172a' : '#1e293b';
+            weight = 2.8;
+            opacity = 0.92;
+          } else if (diff === 2) {
+            color = '#020617';
+            weight = 3.2;
+            opacity = 0.95;
+          } else {
+            color = '#020617';
+            weight = 3.6;
+            opacity = 0.95;
+          }
+        }
+      } else {
+        // 현재 레벨 및 하위 레벨 경계면
+        if (isSatellite) {
+          if (level === 1) {
+            color = '#ffffff';
+            weight = 2.0;
+            opacity = 0.88;
+            fillColor = '#818cf8';
+            fillOpacity = 0.05;
+          } else if (level === 2) {
+            color = '#ffffff';
+            weight = 1.65;
+            opacity = 0.86;
+            fillColor = '#60a5fa';
+            fillOpacity = 0.05;
+          } else if (level === 3) {
+            color = '#38bdf8';
+            weight = 1.3;
+            opacity = 0.78;
+            dashArray = '4, 4';
+            fillColor = '#38bdf8';
+            fillOpacity = 0.04;
+          } else {
+            // Level 4 (읍/면/동)
+            color = '#38bdf8';
+            weight = 1.2;
+            opacity = 0.72;
+            dashArray = '3, 3';
+            fillColor = '#0ea5e9';
+            fillOpacity = 0.04;
+          }
+        } else {
+          if (level === 1) {
+            color = '#475569';
+            weight = 1.8;
+            opacity = 0.65;
+            fillColor = '#6366f1';
+            fillOpacity = 0.02;
+          } else if (level === 2) {
+            color = '#475569';
+            weight = 1.55;
+            opacity = 0.63;
+            fillColor = '#3b82f6';
+            fillOpacity = 0.03;
+          } else if (level === 3) {
+            color = '#38bdf8';
+            weight = 1.1;
+            opacity = 0.48;
+            dashArray = '4, 4';
+            fillColor = '#38bdf8';
+            fillOpacity = 0.02;
+          } else {
+            color = '#0284c7';
+            weight = 1.0;
+            opacity = 0.45;
+            dashArray = '3, 3';
+            fillColor = '#0ea5e9';
+            fillOpacity = 0.03;
+          }
         }
       }
     } else {
-      // 현재 레벨 경계면
-      if (isSatellite) {
-        // 위성 지도 모드: 선명한 흰색 / 밝은 하늘색 경계선으로 암두운 위성 영상 보완
-        if (level === 1) {
-          color = '#ffffff';
-          weight = 2.0;
-          opacity = 0.88;
-          fillColor = '#818cf8';
-          fillOpacity = 0.05;
-        } else if (level === 2) {
-          color = '#ffffff';
-          weight = 1.65;
-          opacity = 0.86;
-          fillColor = '#60a5fa';
-          fillOpacity = 0.05;
-        } else if (level === 3) {
-          color = '#38bdf8';
-          weight = 1.3;
-          opacity = 0.78;
-          dashArray = '4, 4';
-          fillColor = '#38bdf8';
-          fillOpacity = 0.04;
-        } else {
-          // Level 4 (읍/면/동)
-          color = '#38bdf8';
-          weight = 1.2;
-          opacity = 0.72;
-          dashArray = '3, 3';
-          fillColor = '#0ea5e9';
-          fillOpacity = 0.04;
-        }
-      } else {
-        if (level === 1) {
-          color = '#475569';
-          weight = 1.8;
-          opacity = 0.65;
-          fillColor = '#6366f1';
-          fillOpacity = 0.02;
-        } else if (level === 2) {
-          color = '#475569';
-          weight = 1.55;
-          opacity = 0.63;
-          fillColor = '#3b82f6';
-          fillOpacity = 0.03;
-        } else if (level === 3) {
-          color = '#38bdf8';
-          weight = 1.1;
-          opacity = 0.48;
-          dashArray = '4, 4';
-          fillColor = '#38bdf8';
-          fillOpacity = 0.02;
-        } else {
-          color = '#0284c7';
-          weight = 1.0;
-          opacity = 0.45;
-          dashArray = '3, 3';
-          fillColor = '#0ea5e9';
-          fillOpacity = 0.03;
-        }
-      }
+      // 행정구역 경계선 숨김 (showBoundary === false)
+      opacity = 0;
+      weight = 0;
+      fillOpacity = 0;
     }
 
     const base: L.PathOptions = { color, weight, opacity, dashArray, fillColor, fillOpacity };
@@ -195,7 +321,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       return {
         ...base,
         color: isSatellite ? '#c084fc' : '#4f46e5',
-        weight: (base.weight as number) + 1.6,
+        weight: showBoundary ? (base.weight as number) + 1.6 : 2.5,
         opacity: 1.0,
         fillColor: isSatellite ? '#e9d5ff' : '#6366f1',
         fillOpacity: 0.38,
@@ -238,39 +364,40 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         // Only level === activeLevel + 1 can show its colored sub-region overlay if it has preferences set
         if (level === activeLevel + 1 && (pCount > 0 || dCount > 0)) {
           const netScore = pCount - dCount;
+          const colors = legendColorsRef.current;
           if (netScore > 0) {
-            // 선호 우세 (파란색 / Blue)
+            // 선호 우세
             const opacityVal = Math.min(0.40 + Math.min(netScore, 5) * 0.10, 0.85);
             return {
               ...base,
-              color: '#1d4ed8',
-              weight: 1.5,
-              opacity: 0.9,
-              fillColor: '#3b82f6',
+              color: showBoundary ? darkenHexColor(colors.prefColor, 25) : 'transparent',
+              weight: showBoundary ? 1.5 : 0,
+              opacity: showBoundary ? 0.9 : 0,
+              fillColor: colors.prefColor,
               fillOpacity: opacityVal,
             };
           } else if (netScore < 0) {
-            // 비선호 우세 (빨간색 / Red)
+            // 비선호 우세
             const absNet = Math.abs(netScore);
             const opacityVal = Math.min(0.40 + Math.min(absNet, 5) * 0.10, 0.85);
             return {
               ...base,
-              color: '#b91c1c',
-              weight: 1.5,
-              opacity: 0.9,
-              fillColor: '#ef4444',
+              color: showBoundary ? darkenHexColor(colors.disprefColor, 25) : 'transparent',
+              weight: showBoundary ? 1.5 : 0,
+              opacity: showBoundary ? 0.9 : 0,
+              fillColor: colors.disprefColor,
               fillOpacity: opacityVal,
             };
           } else {
-            // 동률 (보라색 / Purple)
+            // 동률
             const totalCount = pCount + dCount;
             const opacityVal = Math.min(0.35 + Math.min(totalCount, 6) * 0.08, 0.80);
             return {
               ...base,
-              color: '#7e22ce',
-              weight: 1.5,
-              opacity: 0.9,
-              fillColor: '#a855f7',
+              color: showBoundary ? darkenHexColor(colors.tieColor, 25) : 'transparent',
+              weight: showBoundary ? 1.5 : 0,
+              opacity: showBoundary ? 0.9 : 0,
+              fillColor: colors.tieColor,
               fillOpacity: opacityVal,
             };
           }
@@ -290,48 +417,49 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         return {
           ...base,
           fillOpacity: 0,
-          opacity: 0.35,
-          weight: Math.max((base.weight as number) || 1, 1.2),
+          opacity: showBoundary ? 0.35 : 0,
+          weight: showBoundary ? Math.max((base.weight as number) || 1, 1.2) : 0,
         };
       }
 
       // Feature is at current activeLevel (level === activeLevel)
       if (pCount > 0 || dCount > 0) {
         const netScore = pCount - dCount;
+        const colors = legendColorsRef.current;
 
         if (netScore > 0) {
-          // 선호 우세 (파란색 / Blue)
+          // 선호 우세
           const opacityVal = Math.min(0.40 + Math.min(netScore, 5) * 0.10, 0.85);
           return {
             ...base,
-            color: '#1d4ed8',
-            weight: Math.max((base.weight as number) || 2, 2.2),
-            opacity: 0.95,
-            fillColor: '#3b82f6',
+            color: showBoundary ? darkenHexColor(colors.prefColor, 25) : 'transparent',
+            weight: showBoundary ? Math.max((base.weight as number) || 2, 2.2) : 0,
+            opacity: showBoundary ? 0.95 : 0,
+            fillColor: colors.prefColor,
             fillOpacity: opacityVal,
           };
         } else if (netScore < 0) {
-          // 비선호 우세 (빨간색 / Red)
+          // 비선호 우세
           const absNet = Math.abs(netScore);
           const opacityVal = Math.min(0.40 + Math.min(absNet, 5) * 0.10, 0.85);
           return {
             ...base,
-            color: '#b91c1c',
-            weight: Math.max((base.weight as number) || 2, 2.2),
-            opacity: 0.95,
-            fillColor: '#ef4444',
+            color: showBoundary ? darkenHexColor(colors.disprefColor, 25) : 'transparent',
+            weight: showBoundary ? Math.max((base.weight as number) || 2, 2.2) : 0,
+            opacity: showBoundary ? 0.95 : 0,
+            fillColor: colors.disprefColor,
             fillOpacity: opacityVal,
           };
         } else {
-          // 동률 (보라색 / Purple)
+          // 동률
           const totalCount = pCount + dCount;
           const opacityVal = Math.min(0.35 + Math.min(totalCount, 6) * 0.08, 0.80);
           return {
             ...base,
-            color: '#7e22ce',
-            weight: Math.max((base.weight as number) || 2, 2.2),
-            opacity: 0.95,
-            fillColor: '#a855f7',
+            color: showBoundary ? darkenHexColor(colors.tieColor, 25) : 'transparent',
+            weight: showBoundary ? Math.max((base.weight as number) || 2, 2.2) : 0,
+            opacity: showBoundary ? 0.95 : 0,
+            fillColor: colors.tieColor,
             fillOpacity: opacityVal,
           };
         }
@@ -360,7 +488,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     groups.forEach(({ group, level }) => {
       const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
-      const isInteractive = (level === currentActiveLevel);
+      const showBoundary = currentVis.boundary !== false;
+      const isInteractive = (level === currentActiveLevel) && (showBoundary || showPrefLayer);
 
       group.eachLayer((geoJsonLayer: any) => {
         if (geoJsonLayer.eachLayer) {
@@ -382,6 +511,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               currentActiveLevel,
               currentPreferences,
               showPrefLayer,
+              showBoundary,
               isSelected
             );
 
@@ -397,20 +527,23 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     });
   };
 
-  // Re-apply feature styles reactively whenever preferences, selection, layer visibility, or mapType change
+  // Re-apply feature styles reactively whenever preferences, selection, layer visibility, legendColors, or mapType change
   useEffect(() => {
     mapTypeRef.current = mapType;
     updateAllFeatureStyles();
-  }, [mapType, selectedRegionCode, regionPreferences, layerVisibility]);
+  }, [mapType, selectedRegionCode, regionPreferences, layerVisibility, legendColors]);
 
   // Switch displayed boundary group based on active level & visibility setting
-  const updateBoundaryVisibility = (zoom: number, isVisible: boolean) => {
+  const updateBoundaryVisibility = (zoom: number) => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
     const currentLevel = calculateAdminLevel(zoom);
     setActiveAdminLevel(currentLevel);
     activeAdminLevelRef.current = currentLevel;
+
+    const currentVis = layerVisibilityRef.current;
+    const shouldShowAnyLayer = currentVis.boundary !== false || currentVis.preference !== false;
 
     const levelGroups: Record<AdminLevel, L.FeatureGroup> = {
       1: level1GroupRef.current,
@@ -419,26 +552,15 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       4: level4GroupRef.current,
     };
 
-    // If boundary visibility is toggled off, remove all boundary groups
-    if (!isVisible) {
-      ([1, 2, 3, 4] as AdminLevel[]).forEach((lvl) => {
-        if (map.hasLayer(levelGroups[lvl])) {
-          map.removeLayer(levelGroups[lvl]);
-        }
-      });
-      return;
-    }
-
-    const activeLevelsToDisplay = new Set<AdminLevel>([1, 2, 3, 4]);
-
     ([1, 2, 3, 4] as AdminLevel[]).forEach((lvl) => {
-      if (activeLevelsToDisplay.has(lvl)) {
-        if (!map.hasLayer(levelGroups[lvl])) {
-          map.addLayer(levelGroups[lvl]);
+      const grp = levelGroups[lvl];
+      if (shouldShowAnyLayer) {
+        if (!map.hasLayer(grp)) {
+          map.addLayer(grp);
         }
       } else {
-        if (map.hasLayer(levelGroups[lvl])) {
-          map.removeLayer(levelGroups[lvl]);
+        if (map.hasLayer(grp)) {
+          map.removeLayer(grp);
         }
       }
     });
@@ -459,12 +581,17 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           selectedRegionCodeRef.current === fName
         );
 
+        const currentVis = layerVisibilityRef.current;
+        const showBoundary = currentVis.boundary !== false;
+        const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
+
         return getFeatureStyle(
           feature,
           level,
           activeAdminLevelRef.current,
           regionPreferencesRef.current,
-          isPrefEnabledForLevel(level, layerVisibilityRef.current),
+          showPrefLayer,
+          showBoundary,
           isSelected
         );
       },
@@ -496,7 +623,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           const lAny = layer as any;
           const el = lAny.getElement ? lAny.getElement() : (lAny._path || null);
           if (el) {
-            const isInteractive = (level === activeAdminLevelRef.current);
+            const currentVis = layerVisibilityRef.current;
+            const isInteractive = (level === activeAdminLevelRef.current) && (currentVis.boundary !== false || currentVis.preference !== false);
             el.style.pointerEvents = isInteractive ? 'auto' : 'none';
           }
         });
@@ -507,6 +635,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const target = e.target;
             const targetFeature = target.feature;
             if (!targetFeature) return;
+
+            const currentVis = layerVisibilityRef.current;
+            const showBoundary = currentVis.boundary !== false;
+            const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
 
             const fCode = String(targetFeature.properties?.code || targetFeature.properties?.SIG_CD || targetFeature.properties?.EMD_CD || '').trim();
             const fName = String(targetFeature.properties?.name || targetFeature.properties?.fullName || '').trim();
@@ -521,13 +653,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               level,
               activeAdminLevelRef.current,
               regionPreferencesRef.current,
-              isPrefEnabledForLevel(level, layerVisibilityRef.current),
+              showPrefLayer,
+              showBoundary,
               isSelected
             );
 
             target.setStyle({
               ...currStyle,
-              weight: (currStyle.weight as number) + 1.2,
+              weight: showBoundary ? (currStyle.weight as number) + 1.2 : 1.5,
               fillOpacity: Math.min((currStyle.fillOpacity as number) + 0.15, 0.8),
             });
           },
@@ -536,6 +669,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const target = e.target;
             const targetFeature = target.feature;
             if (!targetFeature) return;
+
+            const currentVis = layerVisibilityRef.current;
+            const showBoundary = currentVis.boundary !== false;
+            const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
 
             const fCode = String(targetFeature.properties?.code || targetFeature.properties?.SIG_CD || targetFeature.properties?.EMD_CD || '').trim();
             const fName = String(targetFeature.properties?.name || targetFeature.properties?.fullName || '').trim();
@@ -550,7 +687,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               level,
               activeAdminLevelRef.current,
               regionPreferencesRef.current,
-              isPrefEnabledForLevel(level, layerVisibilityRef.current),
+              showPrefLayer,
+              showBoundary,
               isSelected
             );
 
@@ -563,14 +701,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               (e.originalEvent.target as HTMLElement).blur?.();
             }
 
-            const map = mapInstanceRef.current;
-            if (map && e.target && typeof e.target.getBounds === 'function') {
-              const bounds = e.target.getBounds();
-              if (bounds && bounds.isValid()) {
-                map.panTo(bounds.getCenter(), {
-                  animate: true,
-                  duration: 0.8,
-                });
+            // If region is already selected, re-center directly
+            if (selectedRegionCodeRef.current === code || selectedRegionCodeRef.current === displayName) {
+              if (e.target && typeof e.target.getBounds === 'function') {
+                const bounds = e.target.getBounds();
+                if (bounds && bounds.isValid()) {
+                  moveToRegion(bounds);
+                }
               }
             }
 
@@ -626,7 +763,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       const z = mapInstanceRef.current.getZoom();
       setZoomLevel(z);
       const lvl = calculateAdminLevel(z);
-      updateBoundaryVisibility(z, layerVisibility.boundary);
+      updateBoundaryVisibility(z);
       onZoomChange?.(z, lvl);
     };
 
@@ -668,7 +805,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       setIsLoadingGeoData(false);
 
       // Apply initial boundary visibility
-      updateBoundaryVisibility(mapInstanceRef.current.getZoom(), layerVisibility.boundary);
+      updateBoundaryVisibility(mapInstanceRef.current.getZoom());
     });
 
     return () => {
@@ -682,9 +819,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   // Update layer visibility when layerVisibility prop changes
   useEffect(() => {
     if (mapInstanceRef.current) {
-      updateBoundaryVisibility(mapInstanceRef.current.getZoom(), layerVisibility.boundary);
+      updateBoundaryVisibility(mapInstanceRef.current.getZoom());
     }
-  }, [layerVisibility.boundary]);
+  }, [layerVisibility]);
 
   // ResizeObserver for clean map canvas resizing without bouncing
   useEffect(() => {
@@ -701,45 +838,47 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   // Fly camera to selected region when selectedRegionCode changes
   useEffect(() => {
     if (!selectedRegionCode || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
 
-    const groups = [
-      level4GroupRef.current,
-      level3GroupRef.current,
-      level2GroupRef.current,
-      level1GroupRef.current,
-    ];
+    const timer = setTimeout(() => {
+      if (!mapInstanceRef.current) return;
 
-    for (const group of groups) {
-      let foundBounds: L.LatLngBounds | null = null;
-      group.eachLayer((geoJsonLayer: any) => {
-        if (foundBounds) return;
-        if (geoJsonLayer.eachLayer) {
-          geoJsonLayer.eachLayer((layer: any) => {
-            if (foundBounds) return;
-            const feature = layer.feature;
-            if (!feature) return;
-            const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
-            const fName = String(feature.properties?.name || feature.properties?.fullName || '').trim();
+      const groups = [
+        level4GroupRef.current,
+        level3GroupRef.current,
+        level2GroupRef.current,
+        level1GroupRef.current,
+      ];
 
-            if (selectedRegionCode === fCode || selectedRegionCode === fName) {
-              if (layer.getBounds && layer.getBounds().isValid()) {
-                foundBounds = layer.getBounds();
+      for (const group of groups) {
+        let foundBounds: L.LatLngBounds | null = null;
+        group.eachLayer((geoJsonLayer: any) => {
+          if (foundBounds) return;
+          if (geoJsonLayer.eachLayer) {
+            geoJsonLayer.eachLayer((layer: any) => {
+              if (foundBounds) return;
+              const feature = layer.feature;
+              if (!feature) return;
+              const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
+              const fName = String(feature.properties?.name || feature.properties?.fullName || '').trim();
+
+              if (selectedRegionCode === fCode || selectedRegionCode === fName) {
+                if (layer.getBounds && layer.getBounds().isValid()) {
+                  foundBounds = layer.getBounds();
+                }
               }
-            }
-          });
-        }
-      });
-
-      if (foundBounds) {
-        map.panTo(foundBounds.getCenter(), {
-          animate: true,
-          duration: 0.8,
+            });
+          }
         });
-        break;
+
+        if (foundBounds) {
+          moveToRegion(foundBounds);
+          break;
+        }
       }
-    }
-  }, [selectedRegionCode]);
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [selectedRegionCode, moveToRegion]);
 
   // Switch Base Map (Standard vs Satellite)
   const handleToggleMapType = (type: 'standard' | 'satellite') => {
@@ -790,6 +929,62 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           Level {activeAdminLevel}: {currentLevelInfo.name}
         </span>
       </div>
+
+      {/* Shape Overlay Layer (Renders SVG shapes on top of Leaflet map) */}
+      <ShapeOverlay
+        map={mapInstanceRef.current}
+        activeTool={activeTool}
+        shapes={shapes}
+        onAddShape={onAddShape}
+        onUpdateShape={onUpdateShape}
+        onDeleteShape={onDeleteShape}
+        selectedShapeId={selectedShapeId}
+        onSelectShape={setSelectedShapeId}
+        strokeColor={strokeColor}
+        fillColor={fillColor}
+        strokeWidth={strokeWidth}
+        fontSize={fontSize}
+        layerVisible={layerVisibility.shapes !== false}
+      />
+
+      {/* Floating Shape Toolbar (Hancom / PPT Style Ribbon) */}
+      {layerVisibility.shapes !== false && isShapeToolbarVisible && (
+        <ShapeToolbar
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          strokeColor={strokeColor}
+          onChangeStrokeColor={setStrokeColor}
+          fillColor={fillColor}
+          onChangeFillColor={setFillColor}
+          strokeWidth={strokeWidth}
+          onChangeStrokeWidth={setStrokeWidth}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
+          selectedShapeId={selectedShapeId}
+          onDeleteSelectedShape={() => {
+            if (selectedShapeId) {
+              onDeleteShape(selectedShapeId);
+              setSelectedShapeId(null);
+            }
+          }}
+          onClearAllShapes={onClearAllShapes}
+          shapesCount={shapes.length}
+          isVisible={isShapeToolbarVisible}
+          onToggleVisibility={() => setIsShapeToolbarVisible(false)}
+        />
+      )}
+
+      {/* Quick Toggle Button for Shape Toolbar if hidden */}
+      {layerVisibility.shapes !== false && !isShapeToolbarVisible && (
+        <button
+          onClick={() => setIsShapeToolbarVisible(true)}
+          className="absolute top-3 left-3 z-20 bg-slate-900/90 text-white hover:bg-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg border border-slate-700/80 flex items-center space-x-1.5 transition cursor-pointer"
+          title="도형 삽입 툴바 열기"
+        >
+          <Shapes className="w-4 h-4 text-indigo-400" />
+          <span>도형 삽입</span>
+        </button>
+      )}
 
       {/* Horizontal Floating Map Type Switcher Badge (Positioned to the left of zoom controls) */}
       <div className="absolute top-2.5 right-14 z-10 bg-white/95 backdrop-blur-md p-1 rounded-xl shadow-md border border-slate-200/80 flex items-center space-x-1 font-sans text-xs select-none pointer-events-auto">

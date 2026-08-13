@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "preferences": {
+      "title": "Preferences",
+      "description": "Shared region preferences and saved coloring presets across devices",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "List of region preferences"
+        },
+        "presets": {
+          "type": "array",
+          "description": "List of saved coloring presets"
+        },
+        "activePresetId": {
+          "type": "string",
+          "description": "ID of the currently active preset"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      }
+    }
+  }
+}
