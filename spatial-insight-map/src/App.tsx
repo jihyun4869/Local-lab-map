@@ -11,6 +11,9 @@ import { CodeExportModal } from './components/CodeExportModal';
 import { SavePresetModal } from './components/SavePresetModal';
 import { getNextPresetName } from './utils/presetUtils';
 
+// 🔑 비밀번호 설정 (원하시는 비밀번호로 자유롭게 변경하세요!)
+const ACCESS_PASSWORD = '037275'; 
+
 const DEFAULT_INITIAL_PRESET: ColoringPreset = {
   id: 'preset_default_1',
   name: '새파일1',
@@ -40,6 +43,25 @@ const sanitizeShapes = (shapes: any[]): DrawnShape[] => {
 };
 
 export default function App() {
+  // 🔒 비밀번호 인증 상태 관리 (기존 인증 기록 확인)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('site_authenticated') === 'true';
+  });
+  const [inputPassword, setInputPassword] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<boolean>(false);
+
+  // 비밀번호 제출 처리
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputPassword === ACCESS_PASSWORD) {
+      localStorage.setItem('site_authenticated', 'true');
+      setIsAuthenticated(true);
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+    }
+  };
+
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     boundary: true,
@@ -56,7 +78,7 @@ export default function App() {
   // Drawn shapes state ('도형삽입' 레이어)
   const [drawnShapes, setDrawnShapes] = useState<DrawnShape[]>([]);
 
-  // Shape Toolbar State (Controlled for desktop & mobile embedded sidebar)
+  // Shape Toolbar State
   const [activeTool, setActiveTool] = useState<ShapeToolType>('pointer');
   const [strokeColor, setStrokeColor] = useState<string>('#ef4444');
   const [fillColor, setFillColor] = useState<string>('none');
@@ -79,8 +101,10 @@ export default function App() {
   const lastLocalSerializedRef = useRef<string>('');
   const isInitialSyncDoneRef = useRef<boolean>(false);
 
-  // 1. Subscribe to Firestore shared document ('preferences/shared') in real-time
+  // 1. Subscribe to Firestore shared document
   useEffect(() => {
+    if (!isAuthenticated) return; // 인증되지 않은 경우 동기화 안함
+
     const docRef = doc(db, 'preferences', 'shared');
 
     const unsubscribe = onSnapshot(
@@ -149,11 +173,11 @@ export default function App() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [isAuthenticated]);
 
-  // 2. Automatically push local changes to Firestore with debounce
+  // 2. Automatically push local changes to Firestore
   useEffect(() => {
-    if (!isInitialSyncDoneRef.current) return;
+    if (!isAuthenticated || !isInitialSyncDoneRef.current) return;
 
     const currentPayload = {
       data: regionPreferences,
@@ -176,7 +200,7 @@ export default function App() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
+  }, [isAuthenticated, regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
 
   // Shape action handlers
   const handleAddShape = (shape: DrawnShape) => {
@@ -403,9 +427,48 @@ export default function App() {
     shapesCount: drawnShapes.length,
   };
 
+  // 🔒 인증되지 않았을 경우 비밀번호 입력 화면만 표시
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 font-sans text-slate-100">
+        {/* SEO 수집용 헤더는 비밀번호 화면 뒤에도 유지 */}
+        <header className="sr-only">
+          <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
+          <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
+        </header>
+
+        <form onSubmit={handlePasswordSubmit} className="w-full max-w-sm p-6 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 text-center">
+          <div className="mb-4 text-3xl">🔒</div>
+          <h2 className="text-xl font-bold mb-2">동네연구소 접속 제한</h2>
+          <p className="text-sm text-slate-400 mb-6">서비스를 이용하시려면 비밀번호를 입력해 주세요.</p>
+          
+          <input
+            type="password"
+            value={inputPassword}
+            onChange={(e) => setInputPassword(e.target.value)}
+            placeholder="비밀번호 입력"
+            className="w-full px-4 py-2 mb-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-blue-500 text-center"
+            autoFocus
+          />
+
+          {passwordError && (
+            <p className="text-xs text-red-400 mb-3">비밀번호가 올바르지 않습니다.</p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
+          >
+            접속하기
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans antialiased text-slate-100 select-none">
-      {/* 🚀 검색엔진(SEO) 수집 전용 헤더 (화면 디자인에 영향을 주지 않는 접근성 영역) */}
+      {/* 🚀 검색엔진(SEO) 수집 전용 헤더 */}
       <header className="sr-only">
         <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
         <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
@@ -471,7 +534,7 @@ export default function App() {
         />
       </main>
 
-      {/* Right Side Panel (Factor Analysis) */}
+      {/* Right Side Panel */}
       {selectedRegion && activeSelectedRegionPref && (
         <RegionSidePanel
           regionPref={activeSelectedRegionPref}
