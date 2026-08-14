@@ -87,7 +87,6 @@ export default function App() {
       docRef,
       (docSnap) => {
         setIsSyncConnected(true);
-        // Ignore local uncommitted writes snapshots to avoid double rendering / flickering during user interaction
         if (docSnap.metadata.hasPendingWrites) return;
 
         if (docSnap.exists()) {
@@ -124,7 +123,6 @@ export default function App() {
             lastLocalSerializedRef.current = serialized;
           }
         } else {
-          // Document doesn't exist yet: initialize with default sample preferences & initial preset
           const initialPayload = {
             data: SAMPLE_REGION_PREFERENCES,
             shapes: [],
@@ -153,7 +151,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Automatically push local regionPreferences, drawnShapes, savedPresets, activePresetId & legendColors changes to Firestore with debounce
+  // 2. Automatically push local changes to Firestore with debounce
   useEffect(() => {
     if (!isInitialSyncDoneRef.current) return;
 
@@ -253,11 +251,9 @@ export default function App() {
     }
 
     const regName = name || regionPreferences[code]?.name || `행정구역 ${code}`;
-
     let matchedKey = code;
 
     setRegionPreferences((prev) => {
-      // Find existing matching key by exact key, code, or name
       const existingKey = Object.keys(prev).find(
         (k) =>
           k === code ||
@@ -278,7 +274,6 @@ export default function App() {
 
     setSelectedRegion({ code: matchedKey, name: regName });
 
-    // Close left sidebar on mobile when region popup opens
     if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
@@ -348,7 +343,7 @@ export default function App() {
     );
   };
 
-  // Load Sample Data (103개 샘플 평가 지역)
+  // Load Sample Data
   const handleLoadSampleData = () => {
     setRegionPreferences(JSON.parse(JSON.stringify(SAMPLE_REGION_PREFERENCES)));
     setSelectedRegion(null);
@@ -410,6 +405,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans antialiased text-slate-100 select-none">
+      {/* 🚀 검색엔진(SEO) 수집 전용 헤더 (화면 디자인에 영향을 주지 않는 접근성 영역) */}
+      <header className="sr-only">
+        <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
+        <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
+        <p>전국 시군구·동별 선호/비선호 입지 요인을 시각적으로 확인하고 지도 데이터를 분석해 보세요.</p>
+      </header>
+
       {/* Left Collapsible Sidebar */}
       <Sidebar
         layerVisibility={layerVisibility}
