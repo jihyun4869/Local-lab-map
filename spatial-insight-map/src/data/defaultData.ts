@@ -194,4 +194,47 @@ export const SAMPLE_REGION_PREFERENCES: Record<string, RegionPreference> = (() =
   return prefs;
 })();
 
+/**
+ * Ensures all entries in regionPreferences are strictly keyed by their unique administrative code (code).
+ * Normalizes any legacy or inconsistent data structures where keys may have been region names.
+ */
+export function sanitizeRegionPreferences(
+  rawPrefs: Record<string, any> | undefined | null
+): Record<string, RegionPreference> {
+  if (!rawPrefs || typeof rawPrefs !== 'object') {
+    return { ...SAMPLE_REGION_PREFERENCES };
+  }
+
+  const cleanMap: Record<string, RegionPreference> = {};
+
+  Object.entries(rawPrefs).forEach(([key, val]) => {
+    if (!val || typeof val !== 'object') return;
+
+    const explicitCode = String(val.code || '').trim();
+    const isKeyNumeric = /^\d+$/.test(key);
+    const resolvedCode = explicitCode || (isKeyNumeric ? key : '');
+
+    if (!resolvedCode) {
+      cleanMap[key] = {
+        code: key,
+        name: val.name || key,
+        prefItems: Array.isArray(val.prefItems) ? val.prefItems : [],
+        disprefItems: Array.isArray(val.disprefItems) ? val.disprefItems : [],
+        lastUpdated: val.lastUpdated || new Date().toISOString(),
+      };
+      return;
+    }
+
+    cleanMap[resolvedCode] = {
+      code: resolvedCode,
+      name: val.name || key || `행정구역 ${resolvedCode}`,
+      prefItems: Array.isArray(val.prefItems) ? val.prefItems : [],
+      disprefItems: Array.isArray(val.disprefItems) ? val.disprefItems : [],
+      lastUpdated: val.lastUpdated || new Date().toISOString(),
+    };
+  });
+
+  return cleanMap;
+}
+
 

@@ -4,6 +4,32 @@ import { setGeoJsonFeaturesCache } from './regionHierarchy';
 // Helper type for our 4 administrative levels
 export type AdminLevel = 1 | 2 | 3 | 4;
 
+// Standard Sido 2-digit Code to Name Mapping
+export const SIDO_CODE_MAP: Record<string, string> = {
+  '11': '서울특별시',
+  '26': '부산광역시',
+  '27': '대구광역시',
+  '28': '인천광역시',
+  '29': '광주광역시',
+  '30': '대전광역시',
+  '31': '울산광역시',
+  '36': '세종특별자치시',
+  '41': '경기도',
+  '42': '강원특별자치도',
+  '43': '충청북도',
+  '44': '충청남도',
+  '45': '전북특별자치도',
+  '46': '전라남도',
+  '47': '경상북도',
+  '48': '경상남도',
+  '50': '제주특별자치도',
+};
+
+export function getSidoNameByCode(sidoCode: string): string {
+  const code2 = sidoCode.substring(0, 2);
+  return SIDO_CODE_MAP[code2] || '';
+}
+
 export interface AdminLevelInfo {
   level: AdminLevel;
   name: string;
@@ -133,12 +159,16 @@ export async function fetchNationwideGeoJson(): Promise<{
         level1 = {
           type: 'FeatureCollection',
           features: data.features.map((f: Feature) => {
-            const name = f.properties?.name || f.properties?.CTP_KOR_NM || f.properties?.code || '시/도';
+            const code = String(f.properties?.code || f.properties?.CTPRVN_CD || f.properties?.CTP_CD || f.id || '').trim();
+            const rawName = f.properties?.name || f.properties?.CTP_KOR_NM || '';
+            const name = rawName || SIDO_CODE_MAP[code] || '시/도';
             return {
               ...f,
               properties: {
                 ...f.properties,
+                code: code,
                 name: name,
+                fullName: name,
                 type: '광역자치단체',
                 level: 1,
               }
@@ -153,12 +183,21 @@ export async function fetchNationwideGeoJson(): Promise<{
       const data = await resSigungu.json();
       if (data && data.features) {
         const l2Features: Feature[] = data.features.map((f: Feature) => {
-          const rawName: string = f.properties?.name || f.properties?.SIG_KOR_NM || '';
+          const rawName: string = String(f.properties?.name || f.properties?.SIG_KOR_NM || '').trim();
+          const code: string = String(f.properties?.code || f.properties?.SIG_CD || f.properties?.SIGUNGU_CD || f.id || '').trim();
+          const sidoCode = code.substring(0, 2);
+          const sidoName = SIDO_CODE_MAP[sidoCode] || '';
+          const fullName = sidoName && !rawName.includes(sidoName) ? `${sidoName} ${rawName}` : rawName;
+
           return {
             ...f,
             properties: {
               ...f.properties,
+              code: code,
               name: rawName,
+              fullName: fullName,
+              parentCode: sidoCode,
+              parentName: sidoName,
               type: '기초자치단체',
               level: 2,
             }
@@ -174,15 +213,20 @@ export async function fetchNationwideGeoJson(): Promise<{
       const data = await resSubmun.json();
       if (data && data.features) {
         const l3Features: Feature[] = data.features.map((f: Feature) => {
-          const rawName: string = f.properties?.name || f.properties?.EMD_KOR_NM || '읍/면/동';
+          const rawName: string = String(f.properties?.name || f.properties?.EMD_KOR_NM || '읍/면/동').trim();
+          const code: string = String(f.properties?.code || f.properties?.EMD_CD || f.id || '').trim();
           const nameParts = rawName.split(' ');
-          const dongName = nameParts[nameParts.length - 1]; // 마지막 단어 (예: 화정동, 삼성동)
+          const dongName = nameParts[nameParts.length - 1]; // 마지막 단어 (예: 청운효자동, 역삼동)
+          const sigunguCode = code.length >= 5 ? code.substring(0, 5) : '';
+
           return {
             ...f,
             properties: {
               ...f.properties,
+              code: code,
               name: dongName || rawName,
               fullName: rawName,
+              parentCode: sigunguCode,
               type: '3단계 행정구역(읍/면/동)',
               level: 3,
             }

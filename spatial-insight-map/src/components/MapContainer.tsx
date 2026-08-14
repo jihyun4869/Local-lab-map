@@ -15,7 +15,7 @@ interface MapContainerProps {
   regionPreferences: Record<string, RegionPreference>;
   onUpdateRegionPref: (code: string, updated: RegionPreference) => void;
   selectedRegionCode: string | null;
-  onSelectRegion: (code: string | null, name?: string) => void;
+  onSelectRegion: (code: string | null, name?: string, fullName?: string) => void;
   isSidebarCollapsed: boolean;
   onZoomChange?: (zoom: number, activeLevel: AdminLevel) => void;
   legendColors?: LegendColors;
@@ -332,23 +332,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     if (showPrefLayer) {
       const properties = feature.properties || {};
       const fCode = String(properties.code || properties.SIG_CD || properties.EMD_CD || '').trim();
-      const fName = String(properties.name || properties.SIG_KOR_NM || properties.CTP_KOR_NM || '').trim();
-      const fFullName = String(properties.fullName || '').trim();
 
-      // Find direct preference for this feature
-      let pref: RegionPreference | undefined;
-      if (fCode && preferences[fCode]) {
-        pref = preferences[fCode];
-      } else if (fName && preferences[fName]) {
-        pref = preferences[fName];
-      } else {
-        pref = Object.values(preferences).find((p) => {
-          if (!p) return false;
-          if (fCode && p.code && p.code === fCode) return true;
-          if (fName && p.name && (p.name === fName || p.name.includes(fName) || fName.includes(p.name))) return true;
-          if (fFullName && p.name && fFullName.includes(p.name)) return true;
-          return false;
-        });
+      // Find direct preference for this feature strictly by its unique administrative code!
+      let pref: RegionPreference | undefined = fCode ? preferences[fCode] : undefined;
+      if (!pref && fCode) {
+        pref = Object.values(preferences).find((p) => p && p.code === fCode);
       }
 
       let pCount = 0;
@@ -497,13 +485,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const feature = layer.feature;
             if (!feature) return;
 
-            const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || feature.properties?.name || '').trim();
-            const fName = String(feature.properties?.name || feature.properties?.fullName || '').trim();
+            const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
 
-            const isSelected = !!currentSelectedCode && (
-              currentSelectedCode === fCode ||
-              currentSelectedCode === fName
-            );
+            const isSelected = !!currentSelectedCode && (currentSelectedCode === fCode);
 
             const newStyle = getFeatureStyle(
               feature,
@@ -574,11 +558,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       style: (feature) => {
         const properties = feature?.properties || {};
         const fCode = String(properties.code || properties.SIG_CD || properties.EMD_CD || '').trim();
-        const fName = String(properties.name || properties.SIG_KOR_NM || properties.CTP_KOR_NM || '').trim();
 
         const isSelected = !!selectedRegionCodeRef.current && (
-          selectedRegionCodeRef.current === fCode ||
-          selectedRegionCodeRef.current === fName
+          selectedRegionCodeRef.current === fCode
         );
 
         const currentVis = layerVisibilityRef.current;
@@ -596,21 +578,19 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         );
       },
       onEachFeature: (feature, layer) => {
-        const rawName = feature.properties?.name || feature.properties?.SIG_KOR_NM || feature.properties?.fullName || '알 수 없음';
-        const code = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || rawName);
+        const rawName = String(feature.properties?.name || feature.properties?.SIG_KOR_NM || '알 수 없음').trim();
+        const code = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || rawName).trim();
+        const fullName = String(feature.properties?.fullName || rawName).trim();
         
-        let typeInfo = feature.properties?.type || ADMIN_LEVEL_INFOS[level].name;
-        let displayName = rawName;
-
-        if (level === 3 || level === 4) {
-          typeInfo = '3단계 행정구역';
-        }
+        const typeInfo = feature.properties?.type || (level === 3 || level === 4 ? '3단계 행정구역' : ADMIN_LEVEL_INFOS[level].name);
+        const displayName = rawName;
 
         // Clean hover tooltip
         layer.bindTooltip(
           `<div class="font-sans px-1 text-center">
             <div class="text-[10px] font-semibold text-slate-500 leading-tight">${typeInfo}</div>
             <div class="text-xs font-bold text-slate-900 leading-snug">${displayName}</div>
+            ${fullName && fullName !== displayName ? `<div class="text-[10px] text-indigo-600 font-medium">${fullName}</div>` : ''}
           </div>`,
           {
             permanent: false,
@@ -641,11 +621,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
 
             const fCode = String(targetFeature.properties?.code || targetFeature.properties?.SIG_CD || targetFeature.properties?.EMD_CD || '').trim();
-            const fName = String(targetFeature.properties?.name || targetFeature.properties?.fullName || '').trim();
 
             const isSelected = !!selectedRegionCodeRef.current && (
-              selectedRegionCodeRef.current === fCode ||
-              selectedRegionCodeRef.current === fName
+              selectedRegionCodeRef.current === fCode
             );
 
             const currStyle = getFeatureStyle(
@@ -675,11 +653,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const showPrefLayer = isPrefEnabledForLevel(level, currentVis);
 
             const fCode = String(targetFeature.properties?.code || targetFeature.properties?.SIG_CD || targetFeature.properties?.EMD_CD || '').trim();
-            const fName = String(targetFeature.properties?.name || targetFeature.properties?.fullName || '').trim();
 
             const isSelected = !!selectedRegionCodeRef.current && (
-              selectedRegionCodeRef.current === fCode ||
-              selectedRegionCodeRef.current === fName
+              selectedRegionCodeRef.current === fCode
             );
 
             const normStyle = getFeatureStyle(
@@ -702,7 +678,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             }
 
             // If region is already selected, re-center directly
-            if (selectedRegionCodeRef.current === code || selectedRegionCodeRef.current === displayName) {
+            if (selectedRegionCodeRef.current === code) {
               if (e.target && typeof e.target.getBounds === 'function') {
                 const bounds = e.target.getBounds();
                 if (bounds && bounds.isValid()) {
@@ -711,7 +687,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               }
             }
 
-            onSelectRegion(code, displayName);
+            onSelectRegion(code, displayName, fullName);
           },
         });
       },
@@ -859,9 +835,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               const feature = layer.feature;
               if (!feature) return;
               const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
-              const fName = String(feature.properties?.name || feature.properties?.fullName || '').trim();
 
-              if (selectedRegionCode === fCode || selectedRegionCode === fName) {
+              if (selectedRegionCode === fCode) {
                 if (layer.getBounds && layer.getBounds().isValid()) {
                   foundBounds = layer.getBounds();
                 }

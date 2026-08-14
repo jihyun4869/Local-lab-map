@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { LayerVisibility, RegionPreference, ColoringPreset, LegendColors, DEFAULT_LEGEND_COLORS, DrawnShape, ShapeToolType } from './types';
-import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES } from './data/defaultData';
+import { getInitialRegionPref, SAMPLE_REGION_PREFERENCES, sanitizeRegionPreferences } from './data/defaultData';
 import { AdminLevel } from './data/koreaGeoJson';
 import { Sidebar } from './components/Sidebar';
 import { MapContainer } from './components/MapContainer';
@@ -10,9 +10,6 @@ import { RegionSidePanel } from './components/RegionSidePanel';
 import { CodeExportModal } from './components/CodeExportModal';
 import { SavePresetModal } from './components/SavePresetModal';
 import { getNextPresetName } from './utils/presetUtils';
-
-// 🔑 비밀번호 설정 (원하시는 비밀번호로 자유롭게 변경하세요!)
-const ACCESS_PASSWORD = '037275'; 
 
 const DEFAULT_INITIAL_PRESET: ColoringPreset = {
   id: 'preset_default_1',
@@ -43,25 +40,6 @@ const sanitizeShapes = (shapes: any[]): DrawnShape[] => {
 };
 
 export default function App() {
-  // 🔒 비밀번호 인증 상태 관리 (기존 인증 기록 확인)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('site_authenticated') === 'true';
-  });
-  const [inputPassword, setInputPassword] = useState<string>('');
-  const [passwordError, setPasswordError] = useState<boolean>(false);
-
-  // 비밀번호 제출 처리
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputPassword === ACCESS_PASSWORD) {
-      localStorage.setItem('site_authenticated', 'true');
-      setIsAuthenticated(true);
-      setPasswordError(false);
-    } else {
-      setPasswordError(true);
-    }
-  };
-
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     boundary: true,
@@ -78,7 +56,7 @@ export default function App() {
   // Drawn shapes state ('도형삽입' 레이어)
   const [drawnShapes, setDrawnShapes] = useState<DrawnShape[]>([]);
 
-  // Shape Toolbar State
+  // Shape Toolbar State (Controlled for desktop & mobile embedded sidebar)
   const [activeTool, setActiveTool] = useState<ShapeToolType>('pointer');
   const [strokeColor, setStrokeColor] = useState<string>('#ef4444');
   const [fillColor, setFillColor] = useState<string>('none');
@@ -101,23 +79,22 @@ export default function App() {
   const lastLocalSerializedRef = useRef<string>('');
   const isInitialSyncDoneRef = useRef<boolean>(false);
 
-  // 1. Subscribe to Firestore shared document
+  // 1. Subscribe to Firestore shared document ('preferences/shared') in real-time
   useEffect(() => {
-    if (!isAuthenticated) return; // 인증되지 않은 경우 동기화 안함
-
     const docRef = doc(db, 'preferences', 'shared');
 
     const unsubscribe = onSnapshot(
       docRef,
       (docSnap) => {
         setIsSyncConnected(true);
+        // Ignore local uncommitted writes snapshots to avoid double rendering / flickering during user interaction
         if (docSnap.metadata.hasPendingWrites) return;
 
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
           if (remoteData) {
             if (remoteData.data) {
-              setRegionPreferences(remoteData.data);
+              setRegionPreferences(sanitizeRegionPreferences(remoteData.data));
             }
             if (Array.isArray(remoteData.shapes)) {
               setDrawnShapes(sanitizeShapes(remoteData.shapes));
@@ -126,6 +103,7 @@ export default function App() {
               setSavedPresets(
                 remoteData.presets.map((p: any) => ({
                   ...p,
+                  preferences: sanitizeRegionPreferences(p.preferences || {}),
                   shapes: sanitizeShapes(p.shapes || []),
                 }))
               );
@@ -147,6 +125,7 @@ export default function App() {
             lastLocalSerializedRef.current = serialized;
           }
         } else {
+          // Document doesn't exist yet: initialize with default sample preferences & initial preset
           const initialPayload = {
             data: SAMPLE_REGION_PREFERENCES,
             shapes: [],
@@ -173,11 +152,11 @@ export default function App() {
     );
 
     return () => unsubscribe();
-  }, [isAuthenticated]);
+  }, []);
 
-  // 2. Automatically push local changes to Firestore
+  // 2. Automatically push local regionPreferences, drawnShapes, savedPresets, activePresetId & legendColors changes to Firestore with debounce
   useEffect(() => {
-    if (!isAuthenticated || !isInitialSyncDoneRef.current) return;
+    if (!isInitialSyncDoneRef.current) return;
 
     const currentPayload = {
       data: regionPreferences,
@@ -200,7 +179,7 @@ export default function App() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
+  }, [regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
 
   // Shape action handlers
   const handleAddShape = (shape: DrawnShape) => {
@@ -267,26 +246,27 @@ export default function App() {
     });
   };
 
-  // Select or click region
-  const handleSelectRegion = (code: string | null, name?: string) => {
+  // Select or click region strictly by unique administrative code
+  const handleSelectRegion = (code: string | null, name?: string, fullName?: string) => {
     if (!code) {
       setSelectedRegion(null);
       return;
     }
 
-    const regName = name || regionPreferences[code]?.name || `행정구역 ${code}`;
-    let matchedKey = code;
+    const regName = fullName || name || regionPreferences[code]?.name || `행정구역 ${code}`;
 
     setRegionPreferences((prev) => {
-      const existingKey = Object.keys(prev).find(
-        (k) =>
-          k === code ||
-          prev[k]?.code === code ||
-          (regName && (k === regName || prev[k]?.name === regName))
-      );
-
-      if (existingKey) {
-        matchedKey = existingKey;
+      if (prev[code]) {
+        // Update display name if fuller name is provided
+        if (fullName && (!prev[code].name || prev[code].name === name)) {
+          return {
+            ...prev,
+            [code]: {
+              ...prev[code],
+              name: fullName,
+            },
+          };
+        }
         return prev;
       }
 
@@ -296,14 +276,18 @@ export default function App() {
       };
     });
 
-    setSelectedRegion({ code: matchedKey, name: regName });
+    setSelectedRegion({
+      code,
+      name: regionPreferences[code]?.name || regName,
+    });
 
+    // Close left sidebar on mobile when region popup opens
     if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
   };
 
-  // Update Region Preference
+  // Update Region Preference strictly by code
   const handleUpdateRegionPref = (code: string, updated: RegionPreference) => {
     setRegionPreferences((prev) => ({
       ...prev,
@@ -319,7 +303,7 @@ export default function App() {
     const newPreset: ColoringPreset = {
       id: `preset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: finalName,
-      preferences: JSON.parse(JSON.stringify(regionPreferences)),
+      preferences: sanitizeRegionPreferences(JSON.parse(JSON.stringify(regionPreferences))),
       shapes: JSON.parse(JSON.stringify(drawnShapes)),
       createdAt: new Date().toISOString(),
     };
@@ -333,7 +317,7 @@ export default function App() {
     const preset = savedPresets.find((p) => p.id === presetId);
     if (!preset) return;
 
-    setRegionPreferences(JSON.parse(JSON.stringify(preset.preferences || {})));
+    setRegionPreferences(sanitizeRegionPreferences(JSON.parse(JSON.stringify(preset.preferences || {}))));
     setDrawnShapes(sanitizeShapes(preset.shapes || []));
     setActivePresetId(presetId);
     setSelectedRegion(null);
@@ -367,7 +351,7 @@ export default function App() {
     );
   };
 
-  // Load Sample Data
+  // Load Sample Data (103개 샘플 평가 지역)
   const handleLoadSampleData = () => {
     setRegionPreferences(JSON.parse(JSON.stringify(SAMPLE_REGION_PREFERENCES)));
     setSelectedRegion(null);
@@ -427,54 +411,8 @@ export default function App() {
     shapesCount: drawnShapes.length,
   };
 
-  // 🔒 인증되지 않았을 경우 비밀번호 입력 화면만 표시
-  if (!isAuthenticated) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 font-sans text-slate-100">
-        {/* SEO 수집용 헤더는 비밀번호 화면 뒤에도 유지 */}
-        <header className="sr-only">
-          <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
-          <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
-        </header>
-
-        <form onSubmit={handlePasswordSubmit} className="w-full max-w-sm p-6 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 text-center">
-          <div className="mb-4 text-3xl">🔒</div>
-          <h2 className="text-xl font-bold mb-2">동네연구소 접속 제한</h2>
-          <p className="text-sm text-slate-400 mb-6">서비스를 이용하시려면 비밀번호를 입력해 주세요.</p>
-          
-          <input
-            type="password"
-            value={inputPassword}
-            onChange={(e) => setInputPassword(e.target.value)}
-            placeholder="비밀번호 입력"
-            className="w-full px-4 py-2 mb-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-blue-500 text-center"
-            autoFocus
-          />
-
-          {passwordError && (
-            <p className="text-xs text-red-400 mb-3">비밀번호가 올바르지 않습니다.</p>
-          )}
-
-          <button
-            type="submit"
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
-          >
-            접속하기
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans antialiased text-slate-100 select-none">
-      {/* 🚀 검색엔진(SEO) 수집 전용 헤더 */}
-      <header className="sr-only">
-        <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
-        <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
-        <p>전국 시군구·동별 선호/비선호 입지 요인을 시각적으로 확인하고 지도 데이터를 분석해 보세요.</p>
-      </header>
-
       {/* Left Collapsible Sidebar */}
       <Sidebar
         layerVisibility={layerVisibility}
@@ -534,7 +472,7 @@ export default function App() {
         />
       </main>
 
-      {/* Right Side Panel */}
+      {/* Right Side Panel (Factor Analysis) */}
       {selectedRegion && activeSelectedRegionPref && (
         <RegionSidePanel
           regionPref={activeSelectedRegionPref}

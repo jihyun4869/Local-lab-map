@@ -48,7 +48,7 @@ export const SIDO_LIST: ChildRegionInfo[] = [
 ];
 
 export const FALLBACK_CHILDREN_MAP: Record<string, ChildRegionInfo[]> = {
-  // 서울특별시 (11 / 서울)
+  // 서울특별시 (11)
   '11': [
     { code: '11110', name: '종로구', level: 2, parentCode: '11', parentName: '서울특별시' },
     { code: '11140', name: '중구', level: 2, parentCode: '11', parentName: '서울특별시' },
@@ -75,6 +75,77 @@ export const FALLBACK_CHILDREN_MAP: Record<string, ChildRegionInfo[]> = {
     { code: '11680', name: '강남구', level: 2, parentCode: '11', parentName: '서울특별시' },
     { code: '11710', name: '송파구', level: 2, parentCode: '11', parentName: '서울특별시' },
     { code: '11740', name: '강동구', level: 2, parentCode: '11', parentName: '서울특별시' },
+  ],
+  // 부산광역시 (26)
+  '26': [
+    { code: '26110', name: '중구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26140', name: '서구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26170', name: '동구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26200', name: '영도구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26230', name: '부산진구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26260', name: '동래구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26290', name: '남구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26320', name: '북구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26350', name: '해운대구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26380', name: '사하구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26410', name: '금정구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26440', name: '강서구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26470', name: '연제구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26500', name: '수영구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26530', name: '사상구', level: 2, parentCode: '26', parentName: '부산광역시' },
+    { code: '26710', name: '기장군', level: 2, parentCode: '26', parentName: '부산광역시' },
+  ],
+  // 대구광역시 (27)
+  '27': [
+    { code: '27110', name: '중구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27140', name: '동구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27170', name: '서구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27200', name: '남구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27230', name: '북구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27260', name: '수성구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27290', name: '달서구', level: 2, parentCode: '27', parentName: '대구광역시' },
+    { code: '27710', name: '달성군', level: 2, parentCode: '27', parentName: '대구광역시' },
+  ],
+  // 인천광역시 (28)
+  '28': [
+    { code: '28110', name: '중구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28140', name: '동구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28177', name: '미추홀구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28185', name: '연수구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28200', name: '남동구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28237', name: '부평구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28245', name: '계양구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28260', name: '서구', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28710', name: '강화군', level: 2, parentCode: '28', parentName: '인천광역시' },
+    { code: '28720', name: '옹진군', level: 2, parentCode: '28', parentName: '인천광역시' },
+  ],
+  // 광주광역시 (29)
+  '29': [
+    { code: '29110', name: '동구', level: 2, parentCode: '29', parentName: '광주광역시' },
+    { code: '29140', name: '서구', level: 2, parentCode: '29', parentName: '광주광역시' },
+    { code: '29155', name: '남구', level: 2, parentCode: '29', parentName: '광주광역시' },
+    { code: '29170', name: '북구', level: 2, parentCode: '29', parentName: '광주광역시' },
+    { code: '29200', name: '광산구', level: 2, parentCode: '29', parentName: '광주광역시' },
+  ],
+  // 대전광역시 (30)
+  '30': [
+    { code: '30110', name: '동구', level: 2, parentCode: '30', parentName: '대전광역시' },
+    { code: '30140', name: '중구', level: 2, parentCode: '30', parentName: '대전광역시' },
+    { code: '30170', name: '서구', level: 2, parentCode: '30', parentName: '대전광역시' },
+    { code: '30200', name: '유성구', level: 2, parentCode: '30', parentName: '대전광역시' },
+    { code: '30230', name: '대덕구', level: 2, parentCode: '30', parentName: '대전광역시' },
+  ],
+  // 울산광역시 (31)
+  '31': [
+    { code: '31110', name: '중구', level: 2, parentCode: '31', parentName: '울산광역시' },
+    { code: '31140', name: '남구', level: 2, parentCode: '31', parentName: '울산광역시' },
+    { code: '31170', name: '동구', level: 2, parentCode: '31', parentName: '울산광역시' },
+    { code: '31200', name: '북구', level: 2, parentCode: '31', parentName: '울산광역시' },
+    { code: '31710', name: '울주군', level: 2, parentCode: '31', parentName: '울산광역시' },
+  ],
+  // 세종특별자치시 (36)
+  '36': [
+    { code: '36110', name: '세종특별자치시', level: 2, parentCode: '36', parentName: '세종특별자치시' },
   ],
   // 경기도 (41)
   '41': [
@@ -181,7 +252,7 @@ export const FALLBACK_CHILDREN_MAP: Record<string, ChildRegionInfo[]> = {
   ]
 };
 
-// Main Helper: Get child regions for a given parent
+// Main Helper: Get child regions for a given parent strictly by code
 export function getChildRegionsFor(
   parentCode: string,
   parentName: string,
@@ -194,25 +265,14 @@ export function getChildRegionsFor(
   let children: ChildRegionInfo[] = [];
   if (pCode && FALLBACK_CHILDREN_MAP[pCode]) {
     children = [...FALLBACK_CHILDREN_MAP[pCode]];
-  } else if (pName && FALLBACK_CHILDREN_MAP[pName]) {
-    children = [...FALLBACK_CHILDREN_MAP[pName]];
-  } else {
-    // Try matching key by name (e.g. '서울특별시' or '강남구' or '마포구' or '분당구')
-    const key = Object.keys(FALLBACK_CHILDREN_MAP).find(k => {
-      const targetList = FALLBACK_CHILDREN_MAP[k];
-      return targetList.some(item => item.parentName === pName || item.parentCode === pCode);
-    });
-    if (key) {
-      children = [...FALLBACK_CHILDREN_MAP[key]];
-    }
   }
 
   // 2. Try dynamically extracting from cached GeoJSON features
   if (geoJsonFeaturesCache) {
     const dynamicList: ChildRegionInfo[] = [];
 
-    // If Level 1 (e.g. '서울특별시', code '11') -> extract Level 2/3 features
-    if (parentLevel === 1 || pCode.length <= 2 || pName.includes('서울') || pName.includes('경기') || pName.includes('인천')) {
+    // If Level 1 (e.g. Sido code '11', '28', '30') -> extract Level 2/3 features
+    if (parentLevel === 1 || (pCode && pCode.length <= 2)) {
       const l2 = geoJsonFeaturesCache.level2 || [];
       const l3 = geoJsonFeaturesCache.level3 || [];
 
@@ -220,13 +280,12 @@ export function getChildRegionsFor(
         const props = f.properties || {};
         const code = String(props.code || props.SIG_CD || '').trim();
         const name = String(props.name || props.SIG_KOR_NM || '').trim();
-        const ctpName = String(props.CTP_KOR_NM || props.sidoName || '').trim();
 
-        if (code.startsWith(pCode) || (pName && (ctpName.includes(pName) || pName.includes(ctpName) || (pName.includes('서울') && name.endsWith('구'))))) {
-          if (name && !dynamicList.some(x => x.name === name)) {
+        if (code && pCode && code.startsWith(pCode)) {
+          if (!dynamicList.some(x => x.code === code)) {
             dynamicList.push({
-              code: code || name,
-              name,
+              code,
+              name: name || code,
               level: props.level || 2,
               parentCode: pCode,
               parentName: pName
@@ -236,24 +295,20 @@ export function getChildRegionsFor(
       });
     }
 
-    // If Level 2 / 3 (e.g. '강남구', '분당구') -> extract Level 4 features
-    if (parentLevel === 2 || parentLevel === 3 || pCode.length >= 4) {
+    // If Level 2 / 3 (e.g. Sigungu code '11680', '30170', '41135') -> extract Level 4 features
+    if (parentLevel === 2 || parentLevel === 3 || (pCode && pCode.length >= 4)) {
       const l4 = geoJsonFeaturesCache.level4 || [];
 
       l4.forEach(f => {
         const props = f.properties || {};
         const code = String(props.code || props.EMD_CD || '').trim();
         const name = String(props.name || props.EMD_KOR_NM || '').trim();
-        const fullName = String(props.fullName || '').trim();
 
-        const matchByCode = pCode && code.startsWith(pCode.substring(0, 4));
-        const matchByName = pName && (fullName.includes(pName) || props.SIG_KOR_NM === pName);
-
-        if (matchByCode || matchByName) {
-          if (name && !dynamicList.some(x => x.name === name)) {
+        if (code && pCode && code.startsWith(pCode.substring(0, Math.min(pCode.length, 5)))) {
+          if (!dynamicList.some(x => x.code === code)) {
             dynamicList.push({
-              code: code || name,
-              name,
+              code,
+              name: name || code,
               level: 4,
               parentCode: pCode,
               parentName: pName
@@ -264,9 +319,9 @@ export function getChildRegionsFor(
     }
 
     if (dynamicList.length > 0) {
-      // Merge unique
+      // Merge unique strictly by code
       dynamicList.forEach(item => {
-        if (!children.some(c => c.name === item.name)) {
+        if (!children.some(c => c.code === item.code)) {
           children.push(item);
         }
       });
@@ -276,7 +331,7 @@ export function getChildRegionsFor(
   return children;
 }
 
-// Recursively collect all descendant codes/names for preference aggregation
+// Recursively collect all descendant codes for preference aggregation
 export function getAllDescendantsFor(
   parentCode: string,
   parentName: string,
@@ -289,7 +344,7 @@ export function getAllDescendantsFor(
     if (child.level < 4) {
       const grandChildren = getAllDescendantsFor(child.code, child.name, child.level);
       grandChildren.forEach(gc => {
-        if (!allDescendants.some(x => x.name === gc.name || (x.code && gc.code && x.code === gc.code))) {
+        if (!allDescendants.some(x => x.code === gc.code)) {
           allDescendants.push(gc);
         }
       });
@@ -299,7 +354,7 @@ export function getAllDescendantsFor(
   return allDescendants;
 }
 
-// Calculate total aggregated preferences (parent + all descendants)
+// Calculate total aggregated preferences (parent + all descendants) strictly by unique code
 export function getAggregatedPreferenceScores(
   regionCode: string,
   regionName: string,
@@ -309,18 +364,18 @@ export function getAggregatedPreferenceScores(
   let prefCount = 0;
   let disprefCount = 0;
 
-  // 1. Parent's own direct preferences
-  const direct = regionPreferences[regionCode] || regionPreferences[regionName];
+  // 1. Parent's own direct preferences strictly by unique regionCode
+  const direct = regionPreferences[regionCode];
   if (direct) {
     prefCount += direct.prefItems ? direct.prefItems.filter(i => i.checked).length : 0;
     disprefCount += direct.disprefItems ? direct.disprefItems.filter(i => i.checked).length : 0;
   }
 
-  // 2. All descendant regions' preferences
+  // 2. All descendant regions' preferences strictly by desc.code
   const descendants = getAllDescendantsFor(regionCode, regionName, level);
 
   descendants.forEach(desc => {
-    const descPref = regionPreferences[desc.code] || regionPreferences[desc.name];
+    const descPref = regionPreferences[desc.code];
     if (descPref) {
       prefCount += descPref.prefItems ? descPref.prefItems.filter(i => i.checked).length : 0;
       disprefCount += descPref.disprefItems ? descPref.disprefItems.filter(i => i.checked).length : 0;
