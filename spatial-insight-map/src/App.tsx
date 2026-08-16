@@ -11,6 +11,9 @@ import { CodeExportModal } from './components/CodeExportModal';
 import { SavePresetModal } from './components/SavePresetModal';
 import { getNextPresetName } from './utils/presetUtils';
 
+// 🔑 비밀번호 설정 (필요에 따라 변경 가능)
+const ACCESS_PASSWORD = '1234';
+
 const DEFAULT_INITIAL_PRESET: ColoringPreset = {
   id: 'preset_default_1',
   name: '새파일1',
@@ -40,6 +43,25 @@ const sanitizeShapes = (shapes: any[]): DrawnShape[] => {
 };
 
 export default function App() {
+  // 🔒 비밀번호 인증 상태 (sessionStorage를 사용하여 브라우저 탭/창을 닫으면 자동으로 다시 잠김)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('site_authenticated') === 'true';
+  });
+  const [inputPassword, setInputPassword] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<boolean>(false);
+
+  // 비밀번호 제출 핸들러
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputPassword === ACCESS_PASSWORD) {
+      sessionStorage.setItem('site_authenticated', 'true');
+      setIsAuthenticated(true);
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+    }
+  };
+
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     boundary: true,
@@ -93,6 +115,8 @@ export default function App() {
 
   // 1. Load initial data from Firestore shared document ('preferences/shared') once on startup
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     let isMounted = true;
     const docRef = doc(db, 'preferences', 'shared');
 
@@ -167,11 +191,11 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   // 2. Automatically push local regionPreferences, drawnShapes, savedPresets, activePresetId & legendColors changes to Firestore with debounce
   useEffect(() => {
-    if (!isInitialSyncDoneRef.current) return;
+    if (!isAuthenticated || !isInitialSyncDoneRef.current) return;
 
     const currentPayload = {
       data: regionPreferences,
@@ -196,7 +220,7 @@ export default function App() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
+  }, [isAuthenticated, regionPreferences, drawnShapes, savedPresets, activePresetId, legendColors]);
 
   // Shape action handlers
   const handleAddShape = (shape: DrawnShape) => {
@@ -407,8 +431,53 @@ export default function App() {
     shapesCount: drawnShapes.length,
   };
 
+  // 🔒 인증 화면 (인증 안 됨 상태일 때 표시)
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 font-sans text-slate-100">
+        <header className="sr-only">
+          <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
+          <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
+        </header>
+
+        <form onSubmit={handlePasswordSubmit} className="w-full max-w-sm p-6 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 text-center">
+          <div className="mb-4 text-3xl">🔒</div>
+          <h2 className="text-xl font-bold mb-2">동네연구소 접속 제한</h2>
+          <p className="text-sm text-slate-400 mb-6">서비스를 이용하시려면 비밀번호를 입력해 주세요.</p>
+          
+          <input
+            type="password"
+            value={inputPassword}
+            onChange={(e) => setInputPassword(e.target.value)}
+            placeholder="비밀번호 입력"
+            className="w-full px-4 py-2 mb-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-blue-500 text-center"
+            autoFocus
+          />
+
+          {passwordError && (
+            <p className="text-xs text-red-400 mb-3">비밀번호가 올바르지 않습니다.</p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
+          >
+            접속하기
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-900 font-sans antialiased text-slate-100 select-none">
+      {/* 🚀 검색엔진(SEO) 수집 전용 영역 */}
+      <header className="sr-only">
+        <h1>동네연구소 | 서울 및 전국 행정구역 경계 지도 시각화</h1>
+        <h2>동별 입지 분석 및 공간 데이터 평가 도구</h2>
+        <p>전국 시군구·동별 선호/비선호 입지 요인을 시각적으로 확인하고 지도 데이터를 분석해 보세요.</p>
+      </header>
+
       {/* Left Collapsible Sidebar */}
       <Sidebar
         layerVisibility={layerVisibility}
