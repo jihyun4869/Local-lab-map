@@ -206,14 +206,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Collapse Button */}
-        <button
-          onClick={onToggleCollapse}
-          title="사이드바 접기"
-          className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer shrink-0"
-        >
-          <PanelLeftClose className="w-4 h-4" />
-        </button>
+        {/* Header Right Action Buttons (Collapse) */}
+        <div className="flex items-center space-x-0.5">
+          {/* Collapse Button */}
+          <button
+            onClick={onToggleCollapse}
+            title="사이드바 접기"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer shrink-0"
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Scrollable Container (Presets + Layer Control + Stats & Evaluated Regions) */}

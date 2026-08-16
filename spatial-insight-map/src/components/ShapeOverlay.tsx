@@ -18,6 +18,51 @@ interface ShapeOverlayProps {
   layerVisible: boolean;
 }
 
+// Helper: compute dynamically proportional arrowhead geometry based on zoom/distance
+const computeArrowGeometry = (
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  strokeW: number
+) => {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1) {
+    return {
+      lineX2: p2.x,
+      lineY2: p2.y,
+      headPoints: `${p2.x},${p2.y} ${p2.x},${p2.y} ${p2.x},${p2.y}`,
+    };
+  }
+
+  const angle = Math.atan2(dy, dx);
+  // Head length scales smoothly with line length and stroke width
+  const baseHeadLen = Math.max(10, strokeW * 4.5);
+  const headLen = Math.min(baseHeadLen, Math.max(6, dist * 0.35));
+  const headWidth = headLen * 0.7;
+
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  const tipX = p2.x;
+  const tipY = p2.y;
+
+  const leftX = tipX - headLen * cos + headWidth * sin;
+  const leftY = tipY - headLen * sin - headWidth * cos;
+
+  const rightX = tipX - headLen * cos - headWidth * sin;
+  const rightY = tipY - headLen * sin + headWidth * cos;
+
+  const lineStopX = tipX - headLen * 0.5 * cos;
+  const lineStopY = tipY - headLen * 0.5 * sin;
+
+  return {
+    lineX2: lineStopX,
+    lineY2: lineStopY,
+    headPoints: `${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`,
+  };
+};
+
 export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
   map,
   activeTool,
@@ -73,15 +118,21 @@ export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
     return shapeFill;
   }, []);
 
-  // Re-render SVG overlay on map move/zoom
+  // Re-render SVG overlay on map move/zoom with RequestAnimationFrame throttling for buttery smooth performance
   useEffect(() => {
     if (!map) return;
+    let rafId: number | null = null;
     const handleMapMove = () => {
-      setMapTick((t) => t + 1);
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        setMapTick((t) => t + 1);
+        rafId = null;
+      });
     };
     map.on('move zoom zoomend moveend viewreset resize', handleMapMove);
     return () => {
       map.off('move zoom zoomend moveend viewreset resize', handleMapMove);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [map]);
 
@@ -309,11 +360,9 @@ export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
         fontSize,
       };
       onAddShape(shape);
-      onSelectShape(newId);
-      setEditingTextId(newId);
-      setEditingTextVal('텍스트 입력');
+      onSelectShape(null);
     } else {
-      // Rectangle, Circle, Triangle, BlockArrow
+      // Rectangle, Circle, Triangle, BlockArrow, Line, Arrow
       const shape: DrawnShape = {
         id: newId,
         type: activeTool as DrawnShape['type'],
@@ -327,7 +376,8 @@ export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
         fontSize,
       };
       onAddShape(shape);
-      onSelectShape(newId);
+      // Do not automatically select the newly drawn shape - only select upon explicit click
+      onSelectShape(null);
     }
 
     setIsDrawing(false);
@@ -521,21 +571,30 @@ export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
           />
         )}
 
-        {shape.type === 'arrow' && (
-          <line
-            x1={p1.x}
-            y1={p1.y}
-            x2={p2.x}
-            y2={p2.y}
-            stroke={shape.strokeColor}
-            strokeWidth={shape.strokeWidth + (isSelected ? 1 : 0)}
-            markerEnd="url(#arrowhead)"
-            strokeLinecap="round"
-            className="cursor-pointer"
-            onClick={handleShapeClick}
-            onMouseDown={(e) => startDragShape(e, shape, 'move')}
-          />
-        )}
+        {shape.type === 'arrow' && (() => {
+          const { lineX2, lineY2, headPoints } = computeArrowGeometry(p1, p2, shape.strokeWidth);
+          return (
+            <g
+              className="cursor-pointer"
+              onClick={handleShapeClick}
+              onMouseDown={(e) => startDragShape(e, shape, 'move')}
+            >
+              <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={lineX2}
+                y2={lineY2}
+                stroke={shape.strokeColor}
+                strokeWidth={shape.strokeWidth + (isSelected ? 1 : 0)}
+                strokeLinecap="round"
+              />
+              <polygon
+                points={headPoints}
+                fill={shape.strokeColor}
+              />
+            </g>
+          );
+        })()}
 
         {shape.type === 'rectangle' && (
           <rect
@@ -806,19 +865,27 @@ export const ShapeOverlay: React.FC<ShapeOverlayProps> = ({
           />
         );
 
-      case 'arrow':
+      case 'arrow': {
+        const { lineX2, lineY2, headPoints } = computeArrowGeometry(p1, p2, strokeWidth);
         return (
-          <line
-            x1={p1.x}
-            y1={p1.y}
-            x2={p2.x}
-            y2={p2.y}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            markerEnd="url(#arrowhead)"
-            strokeDasharray="4 4"
-          />
+          <g>
+            <line
+              x1={p1.x}
+              y1={p1.y}
+              x2={lineX2}
+              y2={lineY2}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeDasharray="4 4"
+              strokeLinecap="round"
+            />
+            <polygon
+              points={headPoints}
+              fill={strokeColor}
+            />
+          </g>
         );
+      }
 
       case 'rectangle':
       case 'text':

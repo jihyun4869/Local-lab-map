@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
-import { MapPin, X, Plus, Trash2, Save } from 'lucide-react';
+import { MapPin, X, Plus, Trash2, Save, Palette, RotateCcw } from 'lucide-react';
 import { RegionPreference, CheckItem } from '../types';
+
+const COLOR_PRESETS = [
+  { name: '파랑', value: '#3b82f6' },
+  { name: '보라', value: '#8b5cf6' },
+  { name: '초록', value: '#10b981' },
+  { name: '노랑', value: '#f59e0b' },
+  { name: '주황', value: '#f97316' },
+  { name: '빨강', value: '#ef4444' },
+  { name: '분홍', value: '#ec4899' },
+  { name: '청록', value: '#06b6d4' },
+  { name: '검정', value: '#1e293b' },
+];
 
 interface RegionSidePanelProps {
   regionPref: RegionPreference;
@@ -291,6 +303,83 @@ export const RegionSidePanel: React.FC<RegionSidePanelProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* 3. Custom Region Color Override Section */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 md:p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+              <div className="flex items-center space-x-1.5 text-slate-700 font-bold text-xs">
+                <Palette className="w-3.5 h-3.5 text-indigo-600" />
+                <span>지역 고유 색상 지정</span>
+              </div>
+              {regionPref.customColor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newPref = { ...regionPref, lastUpdated: new Date().toISOString() };
+                    delete newPref.customColor;
+                    onUpdate(newPref);
+                  }}
+                  className="text-[10px] text-slate-500 hover:text-slate-800 flex items-center space-x-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 transition cursor-pointer"
+                  title="기본 범례 색상으로 초기화"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>기본값 초기화</span>
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500">
+              {regionPref.customColor ? '사용자 지정 색상이 적용 중입니다.' : '설정하지 않으면 선호/비선호 점수에 따른 범례 색상이 자동 적용됩니다.'}
+            </p>
+
+            {/* Presets and Custom Color Input */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {COLOR_PRESETS.map((preset) => {
+                const isSelected = regionPref.customColor?.toLowerCase() === preset.value.toLowerCase();
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    title={preset.name}
+                    onClick={() => {
+                      if (isSelected) {
+                        const newPref = { ...regionPref, lastUpdated: new Date().toISOString() };
+                        delete newPref.customColor;
+                        onUpdate(newPref);
+                      } else {
+                        onUpdate({
+                          ...regionPref,
+                          customColor: preset.value,
+                          lastUpdated: new Date().toISOString(),
+                        });
+                      }
+                    }}
+                    style={{ backgroundColor: preset.value }}
+                    className={`w-6 h-6 rounded-lg transition-transform cursor-pointer border ${
+                      isSelected ? 'ring-2 ring-indigo-600 ring-offset-2 scale-110 border-white' : 'border-black/10 hover:scale-105'
+                    }`}
+                  />
+                );
+              })}
+
+              {/* Direct Color Picker input */}
+              <label className="relative w-6 h-6 rounded-lg border border-slate-300 bg-white hover:border-indigo-400 flex items-center justify-center cursor-pointer transition overflow-hidden" title="직접 색상 선택">
+                <input
+                  type="color"
+                  value={regionPref.customColor || '#3b82f6'}
+                  onChange={(e) => {
+                    onUpdate({
+                      ...regionPref,
+                      customColor: e.target.value,
+                      lastUpdated: new Date().toISOString(),
+                    });
+                  }}
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                />
+                <span className="text-[10px] font-bold text-slate-600">+</span>
+              </label>
+            </div>
           </div>
         </div>
 

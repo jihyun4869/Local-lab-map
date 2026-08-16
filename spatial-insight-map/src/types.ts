@@ -10,6 +10,7 @@ export interface RegionPreference {
   name: string;
   prefItems: CheckItem[];
   disprefItems: CheckItem[];
+  customColor?: string; // Optional per-region custom color override
   lastUpdated?: string;
 }
 

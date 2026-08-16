@@ -4,7 +4,7 @@ import { setGeoJsonFeaturesCache } from './regionHierarchy';
 // Helper type for our 4 administrative levels
 export type AdminLevel = 1 | 2 | 3 | 4;
 
-// Standard Sido 2-digit Code to Name Mapping
+// Standard Sido 2-digit Code to Name Mapping (MOIS & KOSTAT Compatible)
 export const SIDO_CODE_MAP: Record<string, string> = {
   '11': '서울특별시',
   '26': '부산광역시',
@@ -25,9 +25,123 @@ export const SIDO_CODE_MAP: Record<string, string> = {
   '50': '제주특별자치도',
 };
 
+// Robust Sido Resolution supporting both KOSTAT (2018 GeoJSON) & MOIS Administrative Code Standards
+export function resolveSidoName(code: string, rawName: string = ''): { sidoCode: string; sidoName: string } {
+  const c = String(code || '').trim();
+  const name = String(rawName || '').trim();
+
+  // 1. Direct name matching if rawName already has or belongs to a known province/city
+  if (name.includes('서울') || /^(종로|용산|성동|광진|동대문|중랑|성북|강북|도봉|노원|은평|서대문|마포|양천|강서|구로|금천|영등포|동작|관악|서초|강남|송파|강동)구/.test(name)) {
+    return { sidoCode: '11', sidoName: '서울특별시' };
+  }
+  if (name.includes('부산') || /^(부산진|영도|동래|해운대|사하|금정|연제|수영|사상|기장)/.test(name)) {
+    return { sidoCode: '26', sidoName: '부산광역시' };
+  }
+  if (name.includes('대구') || /^(달서|달성|수성|군위)/.test(name)) {
+    return { sidoCode: '27', sidoName: '대구광역시' };
+  }
+  if (name.includes('인천') || /^(미추홀|부평|계양|강화|옹진|연수)/.test(name)) {
+    return { sidoCode: '28', sidoName: '인천광역시' };
+  }
+  if (name.includes('광주') && !name.includes('경기') && (name.includes('광역시') || /^(광산구)/.test(name))) {
+    return { sidoCode: '29', sidoName: '광주광역시' };
+  }
+  if (name.includes('대전') || /^(유성|대덕)/.test(name)) {
+    return { sidoCode: '30', sidoName: '대전광역시' };
+  }
+  if (name.includes('울산') || /^(울주)/.test(name)) {
+    return { sidoCode: '31', sidoName: '울산광역시' };
+  }
+  if (name.includes('세종')) {
+    return { sidoCode: '36', sidoName: '세종특별자치시' };
+  }
+  if (name.includes('경기') || /^(수원|성남|고양|용인|부천|안산|안양|남양주|화성|평택|의정부|시흥|파주|김포|광명|광주|군포|이천|양주|오산|구리|안성|포천|의왕|하남|여주|양평|동두천|과천|가평|연천)/.test(name) || /^(장안|권선|팔달|영통|수정|중원|분당|덕양|일산동|일산서|처인|기흥|수지|만안|동안|상록|단원|원미|소사|오정)구/.test(name)) {
+    return { sidoCode: '41', sidoName: '경기도' };
+  }
+  if (name.includes('강원') || /^(춘천|원주|강릉|동해|태백|속초|삼척|홍천|횡성|영월|평창|정선|철원|화천|양구|인제|고성|양양)/.test(name)) {
+    return { sidoCode: '42', sidoName: '강원특별자치도' };
+  }
+  if (name.includes('충북') || name.includes('충청북') || /^(청주|충주|제천|보은|옥천|영동|증평|진천|괴산|음성|단양|상당|서원|흥덕|청원)/.test(name)) {
+    return { sidoCode: '43', sidoName: '충청북도' };
+  }
+  if (name.includes('충남') || name.includes('충청남') || /^(천안|공주|보령|아산|서산|논산|계룡|당진|금산|부여|서천|청양|홍성|예산|태안|동남|서북)/.test(name)) {
+    return { sidoCode: '44', sidoName: '충청남도' };
+  }
+  if (name.includes('전북') || name.includes('전라북') || /^(전주|군산|익산|정읍|남원|김제|완주|진안|무주|장수|임실|순창|고창|부안|완산|덕진)/.test(name)) {
+    return { sidoCode: '45', sidoName: '전북특별자치도' };
+  }
+  if (name.includes('전남') || name.includes('전라남') || /^(목포|여수|순천|나주|광양|담양|곡성|구례|고흥|보성|화순|장흥|강진|해남|영암|무안|함평|영광|장성|완도|진도|신안)/.test(name)) {
+    return { sidoCode: '46', sidoName: '전라남도' };
+  }
+  if (name.includes('경북') || name.includes('경상북') || /^(포항|경주|김천|안동|구미|영주|영천|상주|문경|경산|의성|청송|영양|영덕|청도|고령|성주|칠곡|예천|봉화|울진|울릉)/.test(name)) {
+    return { sidoCode: '47', sidoName: '경상북도' };
+  }
+  if (name.includes('경남') || name.includes('경상남') || /^(창원|진주|통영|사천|김해|밀양|거제|양산|의령|함안|창녕|고성|남해|하동|산청|함양|거창|합천|의창|성산|마산합포|마산회원|진해)/.test(name)) {
+    return { sidoCode: '48', sidoName: '경상남도' };
+  }
+  if (name.includes('제주') || /^(서귀포)/.test(name)) {
+    return { sidoCode: '50', sidoName: '제주특별자치도' };
+  }
+
+  // 2. Fall back to code interpretation
+  const prefix2 = c.substring(0, 2);
+
+  // KOSTAT 2018 mapping:
+  const KOSTAT_MAP: Record<string, { sidoCode: string; sidoName: string }> = {
+    '11': { sidoCode: '11', sidoName: '서울특별시' },
+    '21': { sidoCode: '26', sidoName: '부산광역시' },
+    '22': { sidoCode: '27', sidoName: '대구광역시' },
+    '23': { sidoCode: '28', sidoName: '인천광역시' },
+    '24': { sidoCode: '29', sidoName: '광주광역시' },
+    '25': { sidoCode: '30', sidoName: '대전광역시' },
+    '26': { sidoCode: '31', sidoName: '울산광역시' },
+    '29': { sidoCode: '36', sidoName: '세종특별자치시' },
+    '31': { sidoCode: '41', sidoName: '경기도' },
+    '32': { sidoCode: '42', sidoName: '강원특별자치도' },
+    '33': { sidoCode: '43', sidoName: '충청북도' },
+    '34': { sidoCode: '44', sidoName: '충청남도' },
+    '35': { sidoCode: '45', sidoName: '전북특별자치도' },
+    '36': { sidoCode: '46', sidoName: '전라남도' },
+    '37': { sidoCode: '47', sidoName: '경상북도' },
+    '38': { sidoCode: '48', sidoName: '경상남도' },
+    '39': { sidoCode: '50', sidoName: '제주특별자치도' },
+  };
+
+  // MOIS mapping (standard):
+  const MOIS_MAP: Record<string, { sidoCode: string; sidoName: string }> = {
+    '11': { sidoCode: '11', sidoName: '서울특별시' },
+    '26': { sidoCode: '26', sidoName: '부산광역시' },
+    '27': { sidoCode: '27', sidoName: '대구광역시' },
+    '28': { sidoCode: '28', sidoName: '인천광역시' },
+    '29': { sidoCode: '29', sidoName: '광주광역시' },
+    '30': { sidoCode: '30', sidoName: '대전광역시' },
+    '31': { sidoCode: '31', sidoName: '울산광역시' },
+    '36': { sidoCode: '36', sidoName: '세종특별자치시' },
+    '41': { sidoCode: '41', sidoName: '경기도' },
+    '42': { sidoCode: '42', sidoName: '강원특별자치도' },
+    '43': { sidoCode: '43', sidoName: '충청북도' },
+    '44': { sidoCode: '44', sidoName: '충청남도' },
+    '45': { sidoCode: '45', sidoName: '전북특별자치도' },
+    '46': { sidoCode: '46', sidoName: '전라남도' },
+    '47': { sidoCode: '47', sidoName: '경상북도' },
+    '48': { sidoCode: '48', sidoName: '경상남도' },
+    '50': { sidoCode: '50', sidoName: '제주특별자치도' },
+  };
+
+  if (['41', '42', '43', '44', '45', '46', '47', '48', '50'].includes(prefix2)) {
+    return MOIS_MAP[prefix2] || { sidoCode: prefix2, sidoName: '' };
+  }
+
+  if (KOSTAT_MAP[prefix2]) {
+    return KOSTAT_MAP[prefix2];
+  }
+
+  return MOIS_MAP[prefix2] || { sidoCode: prefix2, sidoName: '' };
+}
+
 export function getSidoNameByCode(sidoCode: string): string {
-  const code2 = sidoCode.substring(0, 2);
-  return SIDO_CODE_MAP[code2] || '';
+  const resolved = resolveSidoName(sidoCode);
+  return resolved.sidoName;
 }
 
 export interface AdminLevelInfo {
@@ -160,13 +274,14 @@ export async function fetchNationwideGeoJson(): Promise<{
           type: 'FeatureCollection',
           features: data.features.map((f: Feature) => {
             const code = String(f.properties?.code || f.properties?.CTPRVN_CD || f.properties?.CTP_CD || f.id || '').trim();
-            const rawName = f.properties?.name || f.properties?.CTP_KOR_NM || '';
-            const name = rawName || SIDO_CODE_MAP[code] || '시/도';
+            const rawName = String(f.properties?.name || f.properties?.CTP_KOR_NM || '').trim();
+            const { sidoCode, sidoName } = resolveSidoName(code, rawName);
+            const name = rawName || sidoName || '시/도';
             return {
               ...f,
               properties: {
                 ...f.properties,
-                code: code,
+                code: sidoCode || code,
                 name: name,
                 fullName: name,
                 type: '광역자치단체',
@@ -185,8 +300,7 @@ export async function fetchNationwideGeoJson(): Promise<{
         const l2Features: Feature[] = data.features.map((f: Feature) => {
           const rawName: string = String(f.properties?.name || f.properties?.SIG_KOR_NM || '').trim();
           const code: string = String(f.properties?.code || f.properties?.SIG_CD || f.properties?.SIGUNGU_CD || f.id || '').trim();
-          const sidoCode = code.substring(0, 2);
-          const sidoName = SIDO_CODE_MAP[sidoCode] || '';
+          const { sidoCode, sidoName } = resolveSidoName(code, rawName);
           const fullName = sidoName && !rawName.includes(sidoName) ? `${sidoName} ${rawName}` : rawName;
 
           return {
@@ -215,6 +329,7 @@ export async function fetchNationwideGeoJson(): Promise<{
         const l3Features: Feature[] = data.features.map((f: Feature) => {
           const rawName: string = String(f.properties?.name || f.properties?.EMD_KOR_NM || '읍/면/동').trim();
           const code: string = String(f.properties?.code || f.properties?.EMD_CD || f.id || '').trim();
+          const { sidoCode, sidoName } = resolveSidoName(code, rawName);
           const nameParts = rawName.split(' ');
           const dongName = nameParts[nameParts.length - 1]; // 마지막 단어 (예: 청운효자동, 역삼동)
           const sigunguCode = code.length >= 5 ? code.substring(0, 5) : '';
@@ -227,6 +342,7 @@ export async function fetchNationwideGeoJson(): Promise<{
               name: dongName || rawName,
               fullName: rawName,
               parentCode: sigunguCode,
+              parentName: sidoName,
               type: '3단계 행정구역(읍/면/동)',
               level: 3,
             }

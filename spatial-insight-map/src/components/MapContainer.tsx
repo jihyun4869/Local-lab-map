@@ -347,6 +347,18 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         dCount = pref.disprefItems ? pref.disprefItems.filter((i) => i.checked).length : 0;
       }
 
+      // 0. If user specified a custom color for this specific region, use it directly!
+      if (pref && pref.customColor) {
+        return {
+          ...base,
+          color: showBoundary ? darkenHexColor(pref.customColor, 25) : 'transparent',
+          weight: showBoundary ? Math.max((base.weight as number) || 2, 2.2) : 0,
+          opacity: showBoundary ? 0.95 : 0,
+          fillColor: pref.customColor,
+          fillOpacity: 0.65,
+        };
+      }
+
       // If feature is at a lower administrative level than current active map level (e.g. Level 2 when activeLevel is 1)
       if (level > activeLevel) {
         // Only level === activeLevel + 1 can show its colored sub-region overlay if it has preferences set
@@ -669,6 +681,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             );
 
             target.setStyle(normStyle);
+            if (target.isTooltipOpen && target.isTooltipOpen()) {
+              target.closeTooltip();
+            }
           },
           click: (e) => {
             if (level !== activeAdminLevelRef.current) return;
@@ -677,13 +692,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
               (e.originalEvent.target as HTMLElement).blur?.();
             }
 
-            // If region is already selected, re-center directly
-            if (selectedRegionCodeRef.current === code) {
-              if (e.target && typeof e.target.getBounds === 'function') {
-                const bounds = e.target.getBounds();
-                if (bounds && bounds.isValid()) {
-                  moveToRegion(bounds);
-                }
+            if (e.target && typeof e.target.getBounds === 'function') {
+              const bounds = e.target.getBounds();
+              if (bounds && bounds.isValid()) {
+                moveToRegion(bounds);
               }
             }
 
@@ -811,48 +823,43 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  // Fly camera to selected region when selectedRegionCode changes
+  // Center camera to selected region when selectedRegionCode changes (e.g. from sidebar or search)
   useEffect(() => {
     if (!selectedRegionCode || !mapInstanceRef.current) return;
 
-    const timer = setTimeout(() => {
-      if (!mapInstanceRef.current) return;
+    const groups = [
+      level4GroupRef.current,
+      level3GroupRef.current,
+      level2GroupRef.current,
+      level1GroupRef.current,
+    ];
 
-      const groups = [
-        level4GroupRef.current,
-        level3GroupRef.current,
-        level2GroupRef.current,
-        level1GroupRef.current,
-      ];
+    for (const group of groups) {
+      if (!group) continue;
+      let foundBounds: L.LatLngBounds | null = null;
+      group.eachLayer((geoJsonLayer: any) => {
+        if (foundBounds) return;
+        if (geoJsonLayer.eachLayer) {
+          geoJsonLayer.eachLayer((layer: any) => {
+            if (foundBounds) return;
+            const feature = layer.feature;
+            if (!feature) return;
+            const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
 
-      for (const group of groups) {
-        let foundBounds: L.LatLngBounds | null = null;
-        group.eachLayer((geoJsonLayer: any) => {
-          if (foundBounds) return;
-          if (geoJsonLayer.eachLayer) {
-            geoJsonLayer.eachLayer((layer: any) => {
-              if (foundBounds) return;
-              const feature = layer.feature;
-              if (!feature) return;
-              const fCode = String(feature.properties?.code || feature.properties?.SIG_CD || feature.properties?.EMD_CD || '').trim();
-
-              if (selectedRegionCode === fCode) {
-                if (layer.getBounds && layer.getBounds().isValid()) {
-                  foundBounds = layer.getBounds();
-                }
+            if (selectedRegionCode === fCode) {
+              if (layer.getBounds && layer.getBounds().isValid()) {
+                foundBounds = layer.getBounds();
               }
-            });
-          }
-        });
-
-        if (foundBounds) {
-          moveToRegion(foundBounds);
-          break;
+            }
+          });
         }
-      }
-    }, 50);
+      });
 
-    return () => clearTimeout(timer);
+      if (foundBounds) {
+        moveToRegion(foundBounds);
+        break;
+      }
+    }
   }, [selectedRegionCode, moveToRegion]);
 
   // Switch Base Map (Standard vs Satellite)

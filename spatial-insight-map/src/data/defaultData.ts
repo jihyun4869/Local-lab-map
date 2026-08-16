@@ -214,24 +214,19 @@ export function sanitizeRegionPreferences(
     const isKeyNumeric = /^\d+$/.test(key);
     const resolvedCode = explicitCode || (isKeyNumeric ? key : '');
 
-    if (!resolvedCode) {
-      cleanMap[key] = {
-        code: key,
-        name: val.name || key,
-        prefItems: Array.isArray(val.prefItems) ? val.prefItems : [],
-        disprefItems: Array.isArray(val.disprefItems) ? val.disprefItems : [],
-        lastUpdated: val.lastUpdated || new Date().toISOString(),
-      };
-      return;
-    }
-
-    cleanMap[resolvedCode] = {
-      code: resolvedCode,
-      name: val.name || key || `행정구역 ${resolvedCode}`,
+    const sanitizedEntry: RegionPreference = {
+      code: resolvedCode || key,
+      name: val.name || key || `행정구역 ${resolvedCode || key}`,
       prefItems: Array.isArray(val.prefItems) ? val.prefItems : [],
       disprefItems: Array.isArray(val.disprefItems) ? val.disprefItems : [],
       lastUpdated: val.lastUpdated || new Date().toISOString(),
     };
+
+    if (val.customColor && typeof val.customColor === 'string' && val.customColor.trim()) {
+      sanitizedEntry.customColor = val.customColor.trim();
+    }
+
+    cleanMap[resolvedCode || key] = sanitizedEntry;
   });
 
   return cleanMap;
