@@ -12,7 +12,7 @@ import { SavePresetModal } from './components/SavePresetModal';
 import { getNextPresetName } from './utils/presetUtils';
 
 // 🔑 비밀번호 설정 (필요에 따라 변경 가능)
-const ACCESS_PASSWORD = '1234';
+const ACCESS_PASSWORD = '037275';
 
 const DEFAULT_INITIAL_PRESET: ColoringPreset = {
   id: 'preset_default_1',
